@@ -4,6 +4,8 @@
 
 ;; The first feature:
 ;;   The player can move around the map and not fall over the edges.
+;; The second feature:
+;;   There are walls that the player can't pass through.
 
 (defparameter *window-width* 800)
 (defparameter *window-height* 600)
@@ -27,6 +29,7 @@
 (defclass pos (chakra:component) ((pos :accessor pos :initarg :pos)))
 (defclass tile (chakra:component) ((tile :accessor tile :initarg :tile)))
 (defclass player (chakra:component) ())
+(defclass collider (chakra:component) ())
 
 (chakra:defsystem render-all (world event payload (entity pos tile))
   (declare (ignore world event payload))
@@ -41,29 +44,47 @@
   (chakra:add-components
    world (chakra:make-entity world)
    (make-instance 'player)
+   (make-instance 'collider)
    (make-instance 'pos :pos (gamekit:vec2 1 1))
    (make-instance 'tile :tile #\@)))
+
+(defun place-wall (world x y)
+  (chakra:add-components
+   world (chakra:make-entity world)
+   (make-instance 'collider)
+   (make-instance 'tile :tile #\#)
+   (make-instance 'pos :pos (gamekit:vec2 x y))))
 
 (defun in-world-map-p (x y)
   (and (<= 0 x *physical-width*)
        (<= 0 y *physical-height*)))
 
+(defun collides-with-any-p (x y colliders)
+  "Return true if the given position collides with any of the colliders from the (entity pos collider) query."
+  (iter (for entity in colliders)
+    ;; Doesn't check for self-collision
+    ;; because you shouldn't move into yourself
+    (when (and (= x (gamekit:x (pos (second entity))))
+               (= y (gamekit:y (pos (second entity)))))
+      (return t))))
+
 (chakra:defsystem move-player (world event payload (entity pos player))
-  (declare (ignore world event))
+  (declare (ignore event))
   (let ((x (gamekit:x (pos (second entity))))
-        (y (gamekit:y (pos (second entity)))))
+        (y (gamekit:y (pos (second entity))))
+        (colliders (chakra:query world '(another pos collider))))
     (ecase payload
       ((:up)
-       (when (in-world-map-p x (1+ y))
+       (when (and (in-world-map-p x (1+ y)) (not (collides-with-any-p x (1+ y) colliders)))
          (incf (gamekit:y (pos (second entity))))))
       ((:down)
-       (when (in-world-map-p x (1- y))
+       (when (and (in-world-map-p x (1- y)) (not (collides-with-any-p x (1- y) colliders)))
          (decf (gamekit:y (pos (second entity))))))
       ((:left)
-       (when (in-world-map-p (1- x) y)
+       (when (and (in-world-map-p (1- x) y) (not (collides-with-any-p (1- x) y colliders)))
          (decf (gamekit:x (pos (second entity))))))
       ((:right)
-       (when (in-world-map-p (1+ x) y)
+       (when (and (in-world-map-p (1+ x) y) (not (collides-with-any-p (1+ x) y colliders)))
          (incf (gamekit:x (pos (second entity)))))))))
 
 ;; (gamekit:start 'stone-storm)
@@ -73,6 +94,8 @@
 (defmethod gamekit:post-initialize ((app stone-storm))
   (setf *world* (make-instance 'stone-storm-world))
   (make-player *world*)
+  (iter (for i from 1 to 10)
+    (place-wall *world* i 5))
   (chakra:add-system *world*
                      :render-all
                      (make-instance 'render-all))
