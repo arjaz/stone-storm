@@ -8,6 +8,7 @@
   :serial t
   :depends-on (#:trivial-gamekit
                #:chakra
+               #:rutils
                #:iterate
                #:log4cl)
   :components ((:file "package")
