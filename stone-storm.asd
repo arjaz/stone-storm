@@ -7,9 +7,9 @@
   :version "0.0.1"
   :serial t
   :depends-on (#:trivial-gamekit
+               #:bodge-math
                #:chakra
                #:rutils
-               #:iterate
                #:log4cl)
   :components ((:file "package")
                (:file "stone-storm")))

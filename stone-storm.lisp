@@ -1,11 +1,15 @@
 ;;;; stone-storm.lisp
 
 (in-package #:stone-storm)
+(named-readtables:in-readtable r:rutils-readtable)
+;; (r:toggle-print-hash-table)
 
 ;; The first feature:
 ;;   The player can move around the map and not fall over the edges.
 ;; The second feature:
 ;;   There are walls that the player can't pass through.
+;; The third feature:
+;;   There are doors which are closed by default and opened once you collide with them.
 
 (defparameter *window-width* 800)
 (defparameter *window-height* 600)
@@ -30,6 +34,7 @@
 (defclass tile (c:component) ((tile :accessor tile :initarg :tile)))
 (defclass player (c:component) ())
 (defclass collider (c:component) ())
+(defclass door (c:component) ())
 
 (c:defsystem render-all (world event payload (entity pos tile))
   (declare (ignore world event payload))
@@ -55,37 +60,51 @@
    (make-instance 'tile :tile #\#)
    (make-instance 'pos :pos (gk:vec2 x y))))
 
-(defun in-world-map-p (x y)
-  (and (<= 0 x *physical-width*)
-       (<= 0 y *physical-height*)))
+(defun place-closed-door (world x y)
+  (c:add-components
+   world (c:make-entity world)
+   (make-instance 'collider)
+   (make-instance 'door)
+   (make-instance 'tile :tile #\+)
+   (make-instance 'pos :pos (gk:vec2 x y))))
 
-(defun collides-with-any-p (x y colliders)
-  "Return true if the given position collides with any of the colliders from the (entity pos collider) query."
-  (iter (for entity in colliders)
+(defun in-world-map-p (pos)
+  (and (<= 0 (bm:x pos) *physical-width*)
+       (<= 0 (bm:y pos) *physical-height*)))
+
+(defun collides-with-any (pos colliders)
+  "Return entity collided with if the given position collides with any of the colliders from the (entity pos collider) query."
+  (r:iter (:for entity :in colliders)
     ;; Doesn't check for self-collision
     ;; because you shouldn't move into yourself
-    (when (and (= x (gk:x (pos (second entity))))
-               (= y (gk:y (pos (second entity)))))
-      (return t))))
+    (when (bm:vec= pos (pos (second entity)))
+      (return (first entity)))))
+
+(defun is-a-door-p (world entity)
+  (r:? world 'c::entity-components entity 'door))
+
+(defun direction->vec2 (direction)
+  (ecase direction
+    ((:up) (bm:vec2 0 1))
+    ((:down) (bm:vec2 0 -1))
+    ((:left) (bm:vec2 -1 0))
+    ((:right) (bm:vec2 1 0))))
+
+(defun handle-move (world colliders from-pos-component new-pos)
+  (when (in-world-map-p new-pos)
+    (r:if-let (collided (collides-with-any new-pos colliders))
+      (when (is-a-door-p world collided)
+        (setf (pos from-pos-component) new-pos)
+        (c:remove-component world collided 'tile)
+        (c:add-component world collided (make-instance 'tile :tile #\…)))
+      (setf (pos from-pos-component) new-pos))))
 
 (c:defsystem move-player (world event payload (entity pos player))
   (declare (ignore event))
-  (let ((x (gk:x (pos (second entity))))
-        (y (gk:y (pos (second entity))))
-        (colliders (c:query world '(another pos collider))))
-    (ecase payload
-      ((:up)
-       (when (and (in-world-map-p x (1+ y)) (not (collides-with-any-p x (1+ y) colliders)))
-         (incf (gk:y (pos (second entity))))))
-      ((:down)
-       (when (and (in-world-map-p x (1- y)) (not (collides-with-any-p x (1- y) colliders)))
-         (decf (gk:y (pos (second entity))))))
-      ((:left)
-       (when (and (in-world-map-p (1- x) y) (not (collides-with-any-p (1- x) y colliders)))
-         (decf (gk:x (pos (second entity))))))
-      ((:right)
-       (when (and (in-world-map-p (1+ x) y) (not (collides-with-any-p (1+ x) y colliders)))
-         (incf (gk:x (pos (second entity)))))))))
+  (handle-move world
+               (c:query world '(_ pos collider))
+               (second entity)
+               (bm:add (pos (second entity)) (direction->vec2 payload))))
 
 ;; (gk:start 'stone-storm)
 ;; (gk:stop)
@@ -94,8 +113,12 @@
 (defmethod gk:post-initialize ((app stone-storm))
   (setf *world* (make-instance 'stone-storm-world))
   (make-player *world*)
-  (iter (for i from 1 to 10)
-    (place-wall *world* i 5))
+  (r:iter (:for i :from 0 :to 10)
+    (when (not (= i 5))
+      (place-wall *world* i 5)))
+  (place-closed-door *world* 5 5)
+  (r:iter (:for i :from 0 :to 4)
+    (place-wall *world* 10 i))
   (c:add-system *world*
                      :render-all
                      (make-instance 'render-all))
