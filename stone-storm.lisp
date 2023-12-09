@@ -31,19 +31,12 @@
   (/ (get-internal-real-time) internal-time-units-per-second))
 
 (defclass pos (c:component) ((pos :accessor pos :initarg :pos)))
-(defclass tile (c:component) ((tile :accessor tile :initarg :tile)))
+(defclass tile (c:component)
+  ((tile :accessor tile :initarg :tile)
+   (priority :accessor priority :initarg :priority :initform 0)))
 (defclass player (c:component) ())
 (defclass collider (c:component) ())
 (defclass door (c:component) ())
-
-(c:defsystem render-all (world event payload (entity pos tile))
-  (declare (ignore world event payload))
-  (let* ((x (gk:x (pos (second entity))))
-         (y (gk:y (pos (second entity))))
-         (pos (gk:vec2 (* x +tile-size+) (* y +tile-size+))))
-    (gk:draw-text (string (tile (third entity)))
-                       pos
-                       :font (gk:make-font 'stone-storm::monospace +tile-size+))))
 
 (defun make-player (world)
   (c:add-components
@@ -80,8 +73,11 @@
     (when (bm:vec= pos (pos (second entity)))
       (return (first entity)))))
 
+(defun query-component (world entity component)
+  (r:? world 'c::entity-components entity component))
+
 (defun is-a-door-p (world entity)
-  (r:? world 'c::entity-components entity 'door))
+  (r:true (query-component world entity 'door)))
 
 (defun direction->vec2 (direction)
   (ecase direction
@@ -120,25 +116,47 @@
   (r:iter (:for i :from 0 :to 4)
     (place-wall *world* 10 i))
   (c:add-system *world*
-                     :render-all
-                     (make-instance 'render-all))
-  (c:add-system *world*
-                     :move-player
-                     (make-instance 'move-player))
+                :move-player
+                (make-instance 'move-player))
   (gk:bind-button :left :pressed
-                       (lambda ()
-                         (c:tick-event *world* :move-player :left)))
+                  (lambda ()
+                    (c:tick-event *world* :move-player :left)))
   (gk:bind-button :right :pressed
-                       (lambda ()
-                         (c:tick-event *world* :move-player :right)))
+                  (lambda ()
+                    (c:tick-event *world* :move-player :right)))
   (gk:bind-button :up :pressed
-                       (lambda ()
-                         (c:tick-event *world* :move-player :up)))
+                  (lambda ()
+                    (c:tick-event *world* :move-player :up)))
   (gk:bind-button :down :pressed
-                       (lambda ()
-                         (c:tick-event *world* :move-player :down))))
+                  (lambda ()
+                    (c:tick-event *world* :move-player :down))))
+
+(defun sorted-by-position-and-priority (query)
+  (r:safe-sort
+   query
+   (lambda (e1 e2)
+     (let* ((e1pos (pos (second e1)))
+            (e2pos (pos (second e2)))
+            (e1x (bm:x e1pos))
+            (e1y (bm:y e1pos))
+            (e2x (bm:x e2pos))
+            (e2y (bm:y e2pos))
+            (e1priority (priority (third e1)))
+            (e2priority (priority (third e2))))
+       (or (< e1x e2x)
+           (< e1y e2y)
+           (< e1priority e2priority))))))
+
+(defun render-tile (position tile)
+  (gk:draw-text (string tile)
+                (bm:mult position +tile-size+)
+                :font (gk:make-font 'stone-storm::monospace +tile-size+)))
 
 (defmethod gk:draw ((app stone-storm))
-  (c:tick-event *world* :render-all))
+  (r:iter
+    (:for e in (sorted-by-position-and-priority (c:query *world* '(_ pos tile))))
+    (:for last-e :prev e)
+    (unless (and last-e (bm:vec= (pos (second last-e)) (pos (second e))))
+      (render-tile (pos (second e)) (tile (third e))))))
 
 (defmethod gk:act ((app stone-storm)))
