@@ -43,7 +43,7 @@
    world (c:make-entity world)
    (make-instance 'player)
    (make-instance 'collider)
-   (make-instance 'pos :pos (gk:vec2 1 1))
+   (make-instance 'pos :pos (gk:vec3 1 1 99))
    (make-instance 'tile :tile #\@)))
 
 (defun place-wall (world x y)
@@ -51,7 +51,7 @@
    world (c:make-entity world)
    (make-instance 'collider)
    (make-instance 'tile :tile #\#)
-   (make-instance 'pos :pos (gk:vec2 x y))))
+   (make-instance 'pos :pos (gk:vec3 x y 1))))
 
 (defun place-closed-door (world x y)
   (c:add-components
@@ -59,18 +59,21 @@
    (make-instance 'collider)
    (make-instance 'door)
    (make-instance 'tile :tile #\+)
-   (make-instance 'pos :pos (gk:vec2 x y))))
+   (make-instance 'pos :pos (gk:vec3 x y 1))))
 
 (defun in-world-map-p (pos)
   (and (<= 0 (bm:x pos) *physical-width*)
        (<= 0 (bm:y pos) *physical-height*)))
+
+(defun equal-coordinates-p (pos1 pos2)
+  (bm:vec= (bm:value->vec2 pos1) (bm:value->vec2 pos2)))
 
 (defun collides-with-any (pos colliders)
   "Return entity collided with if the given position collides with any of the colliders from the (entity pos collider) query."
   (r:iter (:for entity :in colliders)
     ;; Doesn't check for self-collision
     ;; because you shouldn't move into yourself
-    (when (bm:vec= pos (pos (second entity)))
+    (when (equal-coordinates-p pos (pos (second entity)))
       (return (first entity)))))
 
 (defun query-component (world entity component)
@@ -79,12 +82,12 @@
 (defun is-a-door-p (world entity)
   (r:true (query-component world entity 'door)))
 
-(defun direction->vec2 (direction)
+(defun direction->add-vec3 (direction)
   (ecase direction
-    ((:up) (bm:vec2 0 1))
-    ((:down) (bm:vec2 0 -1))
-    ((:left) (bm:vec2 -1 0))
-    ((:right) (bm:vec2 1 0))))
+    ((:up) (bm:vec3 0 1 0))
+    ((:down) (bm:vec3 0 -1 0))
+    ((:left) (bm:vec3 -1 0 0))
+    ((:right) (bm:vec3 1 0 0))))
 
 (defun handle-move (world colliders from-pos-component new-pos)
   (when (in-world-map-p new-pos)
@@ -100,7 +103,7 @@
   (handle-move world
                (c:query world '(_ pos collider))
                (second entity)
-               (bm:add (pos (second entity)) (direction->vec2 payload))))
+               (bm:add (pos (second entity)) (direction->add-vec3 payload))))
 
 ;; (gk:start 'stone-storm)
 ;; (gk:stop)
@@ -131,21 +134,18 @@
                   (lambda ()
                     (c:tick-event *world* :move-player :down))))
 
-(defun sorted-by-position-and-priority (query)
+(defun sorted-by-position (query)
+  "Each position is a vec3, we reverse sort by all"
   (r:safe-sort
    query
    (lambda (e1 e2)
-     (let* ((e1pos (pos (second e1)))
-            (e2pos (pos (second e2)))
-            (e1x (bm:x e1pos))
-            (e1y (bm:y e1pos))
-            (e2x (bm:x e2pos))
-            (e2y (bm:y e2pos))
-            (e1priority (priority (third e1)))
-            (e2priority (priority (third e2))))
-       (or (< e1x e2x)
-           (< e1y e2y)
-           (< e1priority e2priority))))))
+     (let ((pos1 (pos (second e1)))
+           (pos2 (pos (second e2))))
+       (or (> (bm:x pos1) (bm:x pos2))
+              (and (= (bm:x pos1) (bm:x pos2))
+                 (or (> (bm:y pos1) (bm:y pos2))
+                      (and (= (bm:y pos1) (bm:y pos2))
+                             (> (bm:z pos1) (bm:z pos2))))))))))
 
 (defun render-tile (position tile)
   (gk:draw-text (string tile)
@@ -154,9 +154,9 @@
 
 (defmethod gk:draw ((app stone-storm))
   (r:iter
-    (:for e in (sorted-by-position-and-priority (c:query *world* '(_ pos tile))))
+    (:for e in (sorted-by-position (c:query *world* '(_ pos tile))))
     (:for last-e :prev e)
-    (unless (and last-e (bm:vec= (pos (second last-e)) (pos (second e))))
-      (render-tile (pos (second e)) (tile (third e))))))
+    (unless (and last-e (equal-coordinates-p (pos (second last-e)) (pos (second e))))
+      (render-tile (bm:value->vec2 (pos (second e))) (tile (third e))))))
 
 (defmethod gk:act ((app stone-storm)))
