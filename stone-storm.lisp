@@ -4,6 +4,8 @@
 (named-readtables:in-readtable r:rutils-readtable)
 ;; (r:toggle-print-hash-table)
 
+;; Rendering features:
+;;   The z coordinate is used to determine the rendering order.
 ;; The first feature:
 ;;   The player can move around the map and not fall over the edges.
 ;; The second feature:
@@ -134,18 +136,12 @@
                   (lambda ()
                     (c:tick-event *world* :move-player :down))))
 
-(defun sorted-by-position (query)
-  "Each position is a vec3, we reverse sort by all"
+(defun sorted-by-z (query)
+  "Each position is a vec3, we reverse sort by z"
   (r:safe-sort
    query
    (lambda (e1 e2)
-     (let ((pos1 (pos (second e1)))
-           (pos2 (pos (second e2))))
-       (or (> (bm:x pos1) (bm:x pos2))
-              (and (= (bm:x pos1) (bm:x pos2))
-                 (or (> (bm:y pos1) (bm:y pos2))
-                      (and (= (bm:y pos1) (bm:y pos2))
-                             (> (bm:z pos1) (bm:z pos2))))))))))
+     (> (bm:z (pos (first e1))) (bm:z (pos (first e2)))))))
 
 (defun render-tile (position tile)
   (gk:draw-text (string tile)
@@ -154,9 +150,11 @@
 
 (defmethod gk:draw ((app stone-storm))
   (iter
-    (for e in (sorted-by-position (c:query *world* '(_ pos tile))))
-    (for last-e previous e)
-    (unless (and last-e (equal-coordinates-p (pos (second last-e)) (pos (second e))))
-      (render-tile (bm:value->vec2 (pos (second e))) (tile (third e))))))
+    (for (position . entities)
+         in (group-by
+             (c:query *world* '(_ pos tile))
+             :test #'equal-coordinates-p
+             :key (lambda (e) (bm:value->vec2 (pos (second e))))))
+    (render-tile position (tile (second (first entities))))))
 
 (defmethod gk:act ((app stone-storm)))
