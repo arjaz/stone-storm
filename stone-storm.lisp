@@ -70,7 +70,7 @@
 
 (defun collides-with-any (pos colliders)
   "Return entity collided with if the given position collides with any of the colliders from the (entity pos collider) query."
-  (r:iter (:for entity :in colliders)
+  (iter (for entity in colliders)
     ;; Doesn't check for self-collision
     ;; because you shouldn't move into yourself
     (when (equal-coordinates-p pos (pos (second entity)))
@@ -112,11 +112,11 @@
 (defmethod gk:post-initialize ((app stone-storm))
   (setf *world* (make-instance 'stone-storm-world))
   (make-player *world*)
-  (r:iter (:for i :from 0 :to 10)
+  (iter (for i from 0 to 10)
     (when (not (= i 5))
       (place-wall *world* i 5)))
   (place-closed-door *world* 5 5)
-  (r:iter (:for i :from 0 :to 4)
+  (iter (for i from 0 to 4)
     (place-wall *world* 10 i))
   (c:add-system *world*
                 :move-player
@@ -153,9 +153,9 @@
                 :font (gk:make-font 'stone-storm::monospace +tile-size+)))
 
 (defmethod gk:draw ((app stone-storm))
-  (r:iter
-    (:for e in (sorted-by-position (c:query *world* '(_ pos tile))))
-    (:for last-e :prev e)
+  (iter
+    (for e in (sorted-by-position (c:query *world* '(_ pos tile))))
+    (for last-e previous e)
     (unless (and last-e (equal-coordinates-p (pos (second last-e)) (pos (second e))))
       (render-tile (bm:value->vec2 (pos (second e))) (tile (third e))))))
 

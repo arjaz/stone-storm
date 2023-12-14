@@ -1,7 +1,7 @@
 ;;;; package.lisp
 
 (defpackage #:stone-storm
-  (:use #:cl)
+  (:use #:cl #:iterate)
   (:local-nicknames
    (:r #:rutils)
    (:gk #:gamekit)
