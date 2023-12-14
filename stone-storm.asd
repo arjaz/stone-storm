@@ -11,6 +11,7 @@
                #:chakra
                #:rutils
                #:iterate
-               #:log4cl)
+               #:log4cl
+               #:group-by)
   :components ((:file "package")
                (:file "stone-storm")))
