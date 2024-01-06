@@ -4,6 +4,8 @@
 (named-readtables:in-readtable r:rutils-readtable)
 ;; (r:toggle-print-hash-table)
 
+
+;; TODO: I really need to introduce a camera, and make the level size independent of the window size
 ;; Rendering features:
 ;;   The z coordinate is used to determine the rendering order.
 ;; The first feature:
@@ -18,8 +20,9 @@
 (defparameter +tile-size+ 25.0)
 ;; So bad, I need to fix this.
 (defparameter *physical-width* (/ *window-width* +tile-size+))
-;; Leave some space at the top for messages
-(defparameter *physical-height* (1- (/ *window-height* +tile-size+)))
+(defparameter *physical-height* (/ *window-height* +tile-size+))
+
+(gk:define-font stone-storm::monospace "assets/Press_Start_2P/PressStart2P-Regular.ttf")
 
 (defclass stone-storm-world (c:world) ())
 (defparameter *debug* t)
@@ -50,7 +53,7 @@
 (defclass player (c:component) ())
 (defclass collider (c:component) ())
 (defclass door (c:component) ())
-
+(defclass health (c:component) ((health :accessor health :initarg :health)))
 
 (defun place-player (world x y)
   (c:add-components
@@ -58,7 +61,16 @@
    (make-instance 'player)
    (make-instance 'collider)
    (make-instance 'pos :pos (gk:vec3 x y 99))
-   (make-instance 'tile :tile #\@)))
+   (make-instance 'tile :tile #\@)
+   (make-instance 'health :health 3)))
+
+(defun place-enemy (world x y tile)
+  (c:add-components
+   world (c:make-entity world)
+   (make-instance 'collider)
+   (make-instance 'pos :pos (gk:vec3 x y 50))
+   (make-instance 'tile :tile tile)
+   (make-instance 'health :health 3)))
 
 (defun place-wall (world x y)
   (c:add-components
@@ -88,7 +100,8 @@
         (case char
           ((#\#) (place-wall world x y))
           ((#\+) (place-closed-door world x y))
-          ((#\@) (place-player world x y)))))))
+          ((#\@) (place-player world x y))
+          ((#\e) (place-enemy world x y #\e)))))))
 
 (defun in-world-map-p (pos)
   (and (<= 0 (bm:x pos) *physical-width*)
@@ -106,8 +119,8 @@
 (defun query-component (world entity component)
   (r:? world 'c::entity-components entity component))
 
-(defun is-a-door-p (world entity)
-  (r:true (query-component world entity 'door)))
+(defun is-a (component world entity)
+  (r:true (query-component world entity component)))
 
 (deftype direction () '(member :up :down :left :right))
 (defun direction->add-vec3 (direction)
@@ -119,19 +132,29 @@
     ((:right) (bm:vec3 1 0 0))))
 
 (defun open-door (world door)
+  (c:remove-component world door 'collider)
   (c:remove-component world door 'tile)
   (c:add-component world door (make-instance 'tile :tile #\…)))
 
 (defun close-door (world door)
+  (c:add-component world door (make-instance 'collider))
   (c:remove-component world door 'tile)
   (c:add-component world door (make-instance 'tile :tile #\+)))
+
+(defun damage-health (world entity damage)
+  (decf (r:? world 'c::entity-components entity 'health 'health) damage)
+  (log:info "damaged to ~a" (r:? world 'c::entity-components entity 'health 'health))
+  (when (>= 0 (r:? world 'c::entity-components entity 'health 'health))
+    (c:remove-entity world entity)))
 
 (defun handle-move (world colliders from-pos-component new-pos)
   (when (in-world-map-p new-pos)
     (r:if-let (collided (collides-with-any new-pos colliders))
-      (when (is-a-door-p world collided)
-        (setf (pos from-pos-component) new-pos)
-        (open-door world collided))
+      (progn
+        (when (is-a 'door world collided)
+          (open-door world collided))
+        (when (is-a 'health world collided)
+          (damage-health world collided 1)))
       (setf (pos from-pos-component) new-pos))))
 
 (c:defsystem move-player (world event payload (entity pos player))
@@ -143,9 +166,7 @@
 
 ;; (gk:start 'stone-storm)
 ;; (gk:stop)
-(defvar *cursor-position* (gamekit:vec2 0 0))
 
-(gk:define-font stone-storm::monospace "assets/Press_Start_2P/PressStart2P-Regular.ttf")
 (defun init-world ()
   (setf *world* (make-instance 'stone-storm-world))
   (load-level *world* #p"assets/levels/01")
@@ -168,6 +189,7 @@
   (gk:bind-button :down :pressed
                   (lambda ()
                     (c:tick-event *world* :move-player :down))))
+
 (defmethod gk:post-initialize ((app stone-storm))
   (init-world))
 
@@ -177,6 +199,10 @@
    query
    (lambda (e1 e2)
      (> (bm:z (pos (first e1))) (bm:z (pos (first e2)))))))
+
+(defun draw-debug-text (txt)
+  (when *debug*
+    (gk:draw-text txt (bm:vec2 0 5))))
 
 (defun render-tile (position tile)
   (gk:draw-text (string tile)
@@ -191,8 +217,7 @@
              :test #'equal-coordinates-p
              :key (lambda (e) (bm:value->vec2 (pos (second e))))))
     (render-tile position (tile (second (first entities)))))
-  (when *debug*
-    (gk:draw-text (format-world-coordinates (cursor-position->world-coordinates *cursor-position*))
-               (bm:vec2 0 (- *window-height* +tile-size+ -5)))))
+  (draw-debug-text
+    (format-world-coordinates (cursor-position->world-coordinates *cursor-position*))))
 
 (defmethod gk:act ((app stone-storm)))
