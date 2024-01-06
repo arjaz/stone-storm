@@ -26,7 +26,7 @@
   "Return current seconds"
   (/ (get-internal-real-time) internal-time-units-per-second))
 
-(defclass pos (c:component) ((pos :accessor pos :initarg :pos)))
+(defclass pos (c:component) ((v :accessor v :initarg :v)))
 (defclass tile (c:component)
   ((tile :accessor tile :initarg :tile)
    (priority :accessor priority :initarg :priority :initform 0)))
@@ -40,7 +40,7 @@
    world (c:make-entity world)
    (make-instance 'player)
    (make-instance 'collider)
-   (make-instance 'pos :pos #v(x y 99))
+   (make-instance 'pos :v #v(x y 99))
    (make-instance 'tile :tile #\@)
    (make-instance 'health :health 3)))
 
@@ -48,7 +48,7 @@
   (c:add-components
    world (c:make-entity world)
    (make-instance 'collider)
-   (make-instance 'pos :pos #v(x y 50))
+   (make-instance 'pos :v #v(x y 50))
    (make-instance 'tile :tile tile)
    (make-instance 'health :health 3)))
 
@@ -57,7 +57,7 @@
    world (c:make-entity world)
    (make-instance 'collider)
    (make-instance 'tile :tile #\#)
-   (make-instance 'pos :pos #v(x y 1))))
+   (make-instance 'pos :v #v(x y 1))))
 
 (defun place-closed-door (world x y)
   (c:add-components
@@ -65,7 +65,7 @@
    (make-instance 'collider)
    (make-instance 'door)
    (make-instance 'tile :tile #\+)
-   (make-instance 'pos :pos #v(x y 1))))
+   (make-instance 'pos :v #v(x y 1))))
 
 (defun load-level (world filename)
   (iter
@@ -93,7 +93,7 @@
 (defun collides-with-any (pos colliders)
   "Return entity collided with if the given position collides with any of the colliders from the (entity pos collider) query."
   (iter (for entity in colliders)
-    (when (equal-coordinates-p pos (pos (second entity)))
+    (when (equal-coordinates-p pos (v (second entity)))
       (return (first entity)))))
 
 (defun query-component (world entity component)
@@ -135,21 +135,21 @@
           (open-door world collided))
         (when (is-a 'health world collided)
           (damage-health world collided 1)))
-      (setf (pos from-pos-component) new-pos))))
+      (setf (v from-pos-component) new-pos))))
 
 (c:defsystem move-player (world event payload (entity pos player))
   (declare (ignore event))
   (handle-move world
                (c:query world '(_ pos collider))
                (second entity)
-               (vec2+ (pos (second entity)) (direction->add-vec3 payload))))
+               (vec2+ (v (second entity)) (direction->add-vec3 payload))))
 
 (defun sorted-by-z (query)
   "Each position is a vec3, we reverse sort by z"
   (r:safe-sort
    query
    (lambda (e1 e2)
-     (> (aref (pos (first e1)) 2) (aref (pos (first e2)) 2)))))
+     (> (aref (v (first e1)) 2) (aref (v (first e2)) 2)))))
 
 (defun render-tile (position tile)
   (setf (blt:color) (blt:white)
@@ -162,7 +162,7 @@
          in (group-by
              (c:query world '(_ pos tile))
              :test #'equal-coordinates-p
-             :key (lambda (e) (vec3->vec2 (pos (second e))))))
+             :key (lambda (e) (vec3->vec2 (v (second e))))))
     (render-tile position (tile (second (first entities)))))
   (blt:refresh))
 
