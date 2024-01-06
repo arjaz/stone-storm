@@ -6,12 +6,11 @@
   :license  "TODO"
   :version "0.0.1"
   :serial t
-  :depends-on (#:trivial-gamekit
-               #:bodge-math
-               #:chakra
+  :depends-on (#:chakra
                #:rutils
                #:iterate
                #:log4cl
-               #:group-by)
+               #:group-by
+               #:cl-blt)
   :components ((:file "package")
                (:file "stone-storm")))
