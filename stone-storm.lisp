@@ -1,12 +1,21 @@
 ;;;; stone-storm.lisp
 
 (in-package #:stone-storm)
+
 (named-readtables:in-readtable r:rutils-readtable)
 
 (defparameter *screen-width* 80)
 (defparameter *screen-height* 50)
+(defparameter *message-height* 10)
+(defparameter *viewport-width* *screen-width*)
+(defparameter *viewport-height* (- *screen-height* *message-height*))
 
-(defclass stone-storm-world (c:world) ())
+(defclass stone-storm-world (c:world)
+  ((logs :accessor logs :initarg :logs :initform nil)))
+
+(defun push-log (world msg)
+  (push msg (logs world)))
+
 (defparameter *debug* t)
 (defvar *world*)
 
@@ -32,27 +41,33 @@
 (defclass collider (c:component) ())
 (defclass door (c:component) ())
 (defclass health (c:component) ((health :accessor health :initarg :health)))
+(defclass named (c:component) ((name :accessor name :initarg :name)))
 
 (defun place-player (world x y)
   (c:add-components
    world (c:make-entity world)
    (make-instance 'player)
+   (make-instance 'named :name "Player")
    (make-instance 'collider)
    (make-instance 'pos :v #v(x y 99))
    (make-instance 'tile :tile #\@)
    (make-instance 'health :health 3)))
 
-(defun place-enemy (world x y tile)
-  (c:add-components
-   world (c:make-entity world)
-   (make-instance 'collider)
-   (make-instance 'pos :v #v(x y 50))
-   (make-instance 'tile :tile tile)
-   (make-instance 'health :health 3)))
+(defun place-enemy (world x y tile &key (name nil))
+  (let ((enemy (c:make-entity world)))
+    (c:add-components
+     world enemy
+     (make-instance 'collider)
+     (make-instance 'pos :v #v(x y 50))
+     (make-instance 'tile :tile tile)
+     (make-instance 'health :health 3))
+    (when name
+      (c:add-component world enemy (make-instance 'named :name name)))))
 
 (defun place-wall (world x y)
   (c:add-components
    world (c:make-entity world)
+   (make-instance 'named :name "Wall")
    (make-instance 'collider)
    (make-instance 'tile :tile #\#)
    (make-instance 'pos :v #v(x y 1))))
@@ -60,6 +75,7 @@
 (defun place-closed-door (world x y)
   (c:add-components
    world (c:make-entity world)
+   (make-instance 'named :name "Door")
    (make-instance 'collider)
    (make-instance 'door)
    (make-instance 'tile :tile #\+)
@@ -68,22 +84,23 @@
 (defun load-level (world filename)
   (iter
     (for line in-sequence (r:split #\newline (r:read-file filename)) with-index i)
-    (when (> i *screen-height*)
-      (error "Level [~a] is bigger than allowed, expected max ~a rows, found at least ~a" filename *screen-height* i))
+    (when (> i *viewport-height*)
+      (error "Level [~a] is bigger than allowed, expected max ~a rows, found at least ~a" filename *viewport-height* i))
     (iter (for char in-string line with-index j)
-      (when (> j *screen-width*)
-        (error "Level [~a] is bigger than allowed, expected max ~a colums, found at least ~a" filename *screen-width* j))
+      (when (> j *viewport-width*)
+        (error "Level [~a] is bigger than allowed, expected max ~a colums, found at least ~a" filename *viewport-width* j))
       (let ((x j)
             (y i))
         (case char
           ((#\#) (place-wall world x y))
           ((#\+) (place-closed-door world x y))
           ((#\@) (place-player world x y))
-          ((#\e) (place-enemy world x y #\e)))))))
+          ((#\e) (place-enemy world x y #\e))
+          ((#\g) (place-enemy world x y #\g :name "Goblin")))))))
 
 (defun in-world-map-p (pos)
-  (and (<= 0 (aref pos 0) *screen-width*)
-       (<= 0 (aref pos 1) *screen-height*)))
+  (and (<= 0 (aref pos 0) *viewport-width*)
+       (<= 0 (aref pos 1) *viewport-height*)))
 
 (defun equal-coordinates-p (pos1 pos2)
   (equalp (vec3->vec2 pos1) (vec3->vec2 pos2)))
@@ -120,10 +137,14 @@
   (c:add-component world door (make-instance 'tile :tile #\+)))
 
 (defun damage-health (world entity damage)
-  (decf (r:? world 'c::entity-components entity 'health 'health) damage)
-  (log:info "damaged to ~a" (r:? world 'c::entity-components entity 'health 'health))
-  (when (>= 0 (r:? world 'c::entity-components entity 'health 'health))
-    (c:remove-entity world entity)))
+  (let ((name (r:if-let (named (query-component world entity 'named))
+                (name named)
+                (format nil "#~a" entity))))
+    (decf (r:? world 'c::entity-components entity 'health 'health) damage)
+    (push-log world (format nil "Dealt ~a damage to ~a" damage name))
+    (when (>= 0 (health (query-component world entity 'health)))
+      (push-log world (format nil "~a died" name))
+      (c:remove-entity world entity))))
 
 (defun handle-move (world colliders from-pos-component new-pos)
   (when (in-world-map-p new-pos)
@@ -150,18 +171,30 @@
      (> (aref (v (first e1)) 2) (aref (v (first e2)) 2)))))
 
 (defun render-tile (position tile)
-  (setf (blt:color) (blt:white)
-        (blt:cell-char (aref position 0) (aref position 1)) tile))
+  (setf (blt:color)
+        (blt:white)
+        (blt:cell-char (aref position 0) (aref position 1))
+        tile))
 
-(defun draw (world)
-  (blt:clear)
+(defun render-world (world)
   (iter
     (for (position . entities)
          in (group-by
              (c:query world '(_ pos tile))
              :test #'equal-coordinates-p
              :key (lambda (e) (vec3->vec2 (v (second e))))))
-    (render-tile position (tile (second (first entities)))))
+    (render-tile position (tile (second (first entities))))))
+
+(defun render-logs (logs)
+  (iter (for msg in-sequence logs with-index i)
+    (when (>= (1+ i) *message-height*)
+      (return))
+    (blt:print 0 (+ *viewport-height* i) (format nil "~d: ~a" i msg))))
+
+(defun draw (world)
+  (blt:clear)
+  (render-world world)
+  (render-logs (logs world))
   (blt:refresh))
 
 (defun configure-window ()
