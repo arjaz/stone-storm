@@ -27,9 +27,7 @@
   (/ (get-internal-real-time) internal-time-units-per-second))
 
 (defclass pos (c:component) ((v :accessor v :initarg :v)))
-(defclass tile (c:component)
-  ((tile :accessor tile :initarg :tile)
-   (priority :accessor priority :initarg :priority :initform 0)))
+(defclass tile (c:component) ((tile :accessor tile :initarg :tile)))
 (defclass player (c:component) ())
 (defclass collider (c:component) ())
 (defclass door (c:component) ())
