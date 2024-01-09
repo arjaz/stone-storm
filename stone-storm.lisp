@@ -105,10 +105,10 @@
 (defun equal-coordinates-p (pos1 pos2)
   (equalp (vec3->vec2 pos1) (vec3->vec2 pos2)))
 
-(defun collides-with-any (pos colliders)
-  "Return entity collided with if the given position collides with any of the colliders from the (entity pos collider) query."
-  (iter (for entity in colliders)
-    (when (equal-coordinates-p pos (v (second entity)))
+(defun entity-at (pos query &key (get-position #'second))
+  "Returns any entity at the given coordinates in the query."
+  (iter (for entity in query)
+    (when (equal-coordinates-p pos (v (funcall get-position entity)))
       (return (first entity)))))
 
 (defun query-component (world entity component)
@@ -148,7 +148,7 @@
 
 (defun handle-move (world colliders from-pos-component new-pos)
   (when (in-world-map-p new-pos)
-    (r:if-let (collided (collides-with-any new-pos colliders))
+    (r:if-let (collided (entity-at new-pos colliders))
       (progn
         (when (is-a 'door world collided)
           (open-door world collided))
