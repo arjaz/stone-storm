@@ -3,7 +3,7 @@
 (asdf:defsystem #:stone-storm
   :description "A game"
   :author "Eugene Rossokha <hsugeneyos@gmail.com>"
-  :license  "TODO"
+  :license "MIT public license"
   :version "0.0.1"
   :serial t
   :depends-on (#:chakra
@@ -14,3 +14,10 @@
                #:cl-blt)
   :components ((:file "package")
                (:file "stone-storm")))
+
+(asdf:defsystem #:chakra
+  :description "Entity Component system"
+  :license "MIT public license"
+  :serial t
+  :components ((:file "chakra"))
+  :depends-on (#:iterate #:alexandria))
