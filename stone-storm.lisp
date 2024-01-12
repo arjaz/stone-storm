@@ -10,14 +10,14 @@
 (defparameter *viewport-width* *screen-width*)
 (defparameter *viewport-height* (- *screen-height* *message-height*))
 
+(defparameter *debug* t)
+(defvar *world*)
+
 (defclass stone-storm-world (c:world)
   ((logs :accessor logs :initarg :logs :initform nil)))
 
 (defun push-log (world msg)
   (push msg (logs world)))
-
-(defparameter *debug* t)
-(defvar *world*)
 
 (defun vec2+ (v1 v2)
   #v((+ (aref v1 0) (aref v2 0))
@@ -30,10 +30,6 @@
 
 (defun vec3->vec2 (v)
   #v((aref v 0) (aref v 1)))
-
-(defun real-time-seconds ()
-  "Return current seconds"
-  (/ (get-internal-real-time) internal-time-units-per-second))
 
 (defclass pos (c:component) ((v :accessor v :initarg :v)))
 (defclass tile (c:component) ((tile :accessor tile :initarg :tile)))
@@ -83,20 +79,18 @@
 
 (defun load-level (world filename)
   (iter
-    (for line in-sequence (r:split #\newline (r:read-file filename)) with-index i)
-    (when (> i *viewport-height*)
-      (error "Level [~a] is bigger than allowed, expected max ~a rows, found at least ~a" filename *viewport-height* i))
-    (iter (for char in-string line with-index j)
-      (when (> j *viewport-width*)
-        (error "Level [~a] is bigger than allowed, expected max ~a colums, found at least ~a" filename *viewport-width* j))
-      (let ((x j)
-            (y i))
-        (case char
-          ((#\#) (place-wall world x y))
-          ((#\+) (place-closed-door world x y))
-          ((#\@) (place-player world x y))
-          ((#\e) (place-enemy world x y #\e))
-          ((#\g) (place-enemy world x y #\g :name "Goblin")))))))
+    (for line in-sequence (r:split #\newline (r:read-file filename)) with-index y)
+    (when (> y *viewport-height*)
+      (error "Level [~a] is bigger than allowed, expected max ~a rows, found at least ~a" filename *viewport-height* y))
+    (iter (for char in-string line with-index x)
+      (when (> x *viewport-width*)
+        (error "Level [~a] is bigger than allowed, expected max ~a colums, found at least ~a" filename *viewport-width* x))
+      (case char
+        ((#\#) (place-wall world x y))
+        ((#\+) (place-closed-door world x y))
+        ((#\@) (place-player world x y))
+        ((#\e) (place-enemy world x y #\e))
+        ((#\g) (place-enemy world x y #\g :name "Goblin"))))))
 
 (defun in-world-map-p (pos)
   (and (<= 0 (aref pos 0) *viewport-width*)
