@@ -38,6 +38,7 @@
 (defclass door (c:component) ())
 (defclass health (c:component) ((health :accessor health :initarg :health)))
 (defclass named (c:component) ((name :accessor name :initarg :name)))
+(defclass inventory (c:component) ((items :accessor items :initarg :items)))
 
 (defun place-player (world x y)
   (c:add-components
@@ -50,13 +51,20 @@
    (make-instance 'health :health 3)))
 
 (defun place-enemy (world x y tile &key (name nil))
-  (let ((enemy (c:make-entity world)))
+  (let ((wall (c:make-entity world))
+        (enemy (c:make-entity world)))
+    (c:add-components
+     world wall
+     (make-instance 'named :name "Wall")
+     (make-instance 'collider)
+     (make-instance 'tile :tile #\#))
     (c:add-components
      world enemy
      (make-instance 'collider)
      (make-instance 'pos :v #v(x y 50))
      (make-instance 'tile :tile tile)
-     (make-instance 'health :health 3))
+     (make-instance 'health :health 3)
+     (make-instance 'inventory :items (list wall)))
     (when name
       (c:add-component world enemy (make-instance 'named :name name)))))
 
@@ -132,6 +140,10 @@
     (push-log world (format nil "Dealt ~a damage to ~a" damage name))
     (when (>= 0 (health (c:component world entity 'health)))
       (push-log world (format nil "~a died" name))
+      ;; TODO: actually check for the position and copy it
+      (r:if-let (inventory (c:component world entity 'inventory))
+        (iter (for e in (items inventory))
+          (c:add-component world e (c:component world entity 'pos))))
       (c:remove-entity world entity))))
 
 (defun handle-move (world colliders from-pos-component new-pos)
