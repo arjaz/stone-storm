@@ -105,12 +105,6 @@
     (when (equal-coordinates-p pos (v (funcall get-position entity)))
       (return (first entity)))))
 
-(defun query-component (world entity component)
-  (r:? world 'c::entity-components entity component))
-
-(defun is-a (component world entity)
-  (r:true (query-component world entity component)))
-
 (deftype direction () '(member :up :down :left :right))
 (defun direction->add-vec3 (direction)
   (declare (type direction direction))
@@ -122,21 +116,21 @@
 
 (defun open-door (world door)
   (c:remove-component world door 'collider)
-  (c:remove-component world door 'tile)
-  (c:add-component world door (make-instance 'tile :tile #\…)))
+  (c:add-component world door
+                   (make-instance 'tile :tile #\…)))
 
 (defun close-door (world door)
-  (c:add-component world door (make-instance 'collider))
-  (c:remove-component world door 'tile)
-  (c:add-component world door (make-instance 'tile :tile #\+)))
+  (c:add-components world door
+                    (make-instance 'collider)
+                    (make-instance 'tile :tile #\+)))
 
 (defun damage-health (world entity damage)
-  (let ((name (r:if-let (named (query-component world entity 'named))
+  (let ((name (r:if-let (named (c:component world entity 'named))
                 (name named)
                 (format nil "#~a" entity))))
-    (decf (r:? world 'c::entity-components entity 'health 'health) damage)
+    (decf (health (c:component world entity 'health)) damage)
     (push-log world (format nil "Dealt ~a damage to ~a" damage name))
-    (when (>= 0 (health (query-component world entity 'health)))
+    (when (>= 0 (health (c:component world entity 'health)))
       (push-log world (format nil "~a died" name))
       (c:remove-entity world entity))))
 
@@ -144,9 +138,9 @@
   (when (in-world-map-p new-pos)
     (r:if-let (collided (entity-at new-pos colliders))
       (progn
-        (when (is-a 'door world collided)
+        (when (has-a 'door world collided)
           (open-door world collided))
-        (when (is-a 'health world collided)
+        (when (has-a 'health world collided)
           (damage-health world collided 1)))
       (setf (v from-pos-component) new-pos))))
 
@@ -183,7 +177,8 @@
   (iter (for msg in-sequence logs with-index i)
     (when (>= (1+ i) *message-height*)
       (return))
-    (blt:print 0 (+ *viewport-height* i) (format nil "~d: ~a" i msg))))
+    (blt:print 0 (+ *viewport-height* i)
+               (format nil "~d: ~a" i msg))))
 
 (defun draw (world)
   (blt:clear)
