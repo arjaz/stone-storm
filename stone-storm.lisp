@@ -19,6 +19,11 @@
 (defun push-log (world msg)
   (push msg (logs world)))
 
+(defun copy-vec3 (v)
+  #v((aref v 0)
+     (aref v 1)
+     (aref v 2)))
+
 (defun vec2+ (v1 v2)
   #v((+ (aref v1 0) (aref v2 0))
      (+ (aref v1 1) (aref v2 1))))
@@ -51,22 +56,28 @@
    (make-instance 'health :health 3)))
 
 (defun place-enemy (world x y tile &key (name nil))
-  (let ((wall (c:make-entity world))
-        (enemy (c:make-entity world)))
-    (c:add-components
-     world wall
-     (make-instance 'named :name "Wall")
-     (make-instance 'collider)
-     (make-instance 'tile :tile #\#))
+  (let ((enemy (c:make-entity world)))
     (c:add-components
      world enemy
      (make-instance 'collider)
      (make-instance 'pos :v #v(x y 50))
      (make-instance 'tile :tile tile)
-     (make-instance 'health :health 3)
-     (make-instance 'inventory :items (list wall)))
+     (make-instance 'health :health 3))
     (when name
-      (c:add-component world enemy (make-instance 'named :name name)))))
+      (c:add-component world enemy (make-instance 'named :name name)))
+    enemy))
+
+(defun place-enemy-grower (world x y)
+  (let ((enemy (place-enemy world x y #\G :name "Grower"))
+        (growth (c:make-entity world)))
+    (c:add-components
+     world growth
+     (make-instance 'named :name "Growth")
+     (make-instance 'collider)
+     (make-instance 'tile :tile #\$))
+    (c:add-component
+     world enemy
+     (make-instance 'inventory :items (list growth)))))
 
 (defun place-wall (world x y)
   (c:add-components
@@ -97,7 +108,7 @@
         ((#\#) (place-wall world x y))
         ((#\+) (place-closed-door world x y))
         ((#\@) (place-player world x y))
-        ((#\e) (place-enemy world x y #\e))
+        ((#\G) (place-enemy-grower world x y))
         ((#\g) (place-enemy world x y #\g :name "Goblin"))))))
 
 (defun in-world-map-p (pos)
@@ -140,19 +151,20 @@
     (push-log world (format nil "Dealt ~a damage to ~a" damage name))
     (when (>= 0 (health (c:component world entity 'health)))
       (push-log world (format nil "~a died" name))
-      ;; TODO: actually check for the position and copy it
-      (r:if-let (inventory (c:component world entity 'inventory))
-        (iter (for e in (items inventory))
-          (c:add-component world e (c:component world entity 'pos))))
+      (r:when-let (position (c:component world entity 'pos))
+        (r:when-let (inventory (c:component world entity 'inventory))
+          (iter (for e in (items inventory))
+            (for new-pos = (make-instance 'pos :v (copy-vec3 (v position))))
+            (c:add-component world e new-pos))))
       (c:remove-entity world entity))))
 
 (defun handle-move (world colliders from-pos-component new-pos)
   (when (in-world-map-p new-pos)
     (r:if-let (collided (entity-at new-pos colliders))
       (progn
-        (when (has-a 'door world collided)
+        (when (c:has-a 'door world collided)
           (open-door world collided))
-        (when (has-a 'health world collided)
+        (when (c:has-a 'health world collided)
           (damage-health world collided 1)))
       (setf (v from-pos-component) new-pos))))
 
