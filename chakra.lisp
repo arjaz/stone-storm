@@ -75,7 +75,9 @@ are indeed associated with that ENTITY in the given WORLD."
 
 (defun entity-defined-p (world entity)
   "Check if the ENTITY is present in the WORLD."
-  (not (zerop (aref (entity-ids world) entity))))
+  (handler-case
+      (not (zerop (aref (entity-ids world) entity)))
+    (sb-int:invalid-array-index-error () nil)))
 
 (defun query (world query)
   "Extract the list with the data of matching components based on the QUERY.
