@@ -13,7 +13,6 @@
    #:remove-component
    #:remove-components
    #:component
-   #:components
    #:has-a))
 
 (in-package #:chakra)
@@ -22,15 +21,15 @@
   ((entity-components
     :initform (make-hash-table)
     :accessor entity-components
-    :documentation "A hash table from the entity id to its components - hash tables from the component types to their data.")
+    :documentation "A hash table from component types to arrays of components.")
    (entity-ids
-    :initform (make-array 256 :fill-pointer 0
+    :initform (make-array 255 :fill-pointer 0
                               :adjustable t
                               :element-type 'bit
                               :initial-element 0)
     :accessor entity-ids
     :documentation "An array of all entity ids."))
-  (:documentation "Handles the entities. Hash tables are used to enforce uniqueness."))
+  (:documentation "Handles the entities and their components."))
 
 (defclass component () ()
   (:documentation "A base class for user-defined components"))
@@ -48,21 +47,19 @@
 (defun negative-dependencies-satisfied-p (world entity query)
   "Check if the negative component dependencies of the QUERY which must not be present in the ENTITY
 are indeed not associated with that ENTITY in the given WORLD."
-  (let ((components (gethash entity (entity-components world))))
-    (iter (for component-type in (query-negative-dependencies query))
-      (when (nth-value 1 (gethash component-type components))
-        (leave))
-      (finally (return t)))))
+  (iter (for component-type in (query-negative-dependencies query))
+    (when (has-a component-type world entity)
+      (leave))
+    (finally (return t))))
 
 (defun positive-dependencies (world entity query)
   "Check if the positive component dependencies of the QUERY which must be present in the ENTITY
 are indeed associated with that ENTITY in the given WORLD."
-  (let ((components (gethash entity (entity-components world))))
-    (iter (for component-type in (query-positive-dependencies query))
-      (alexandria:if-let (component (gethash component-type components))
-        (collect component into collected-components)
-        (leave))
-      (finally (return (values collected-components t))))))
+  (iter (for component-type in (query-positive-dependencies query))
+    (alexandria:if-let (component (component world entity component-type))
+      (collect component into collected-components)
+      (leave))
+    (finally (return (values collected-components t)))))
 
 (defun entity-defined-p (world entity)
   "Check if the ENTITY is present in the WORLD."
@@ -92,25 +89,22 @@ The second value indicates whether the query was successful."
 
 (defun make-entity (world)
   "Inserts a new empty entity into the WORLD and returns it."
-  (flet ((initialize-components (entity)
-           (setf (gethash entity (entity-components world)) (make-hash-table))))
-    (iter (for entity from 0 below (length (entity-ids world)))
-      ;; found an empty slot in the entities array - use it
-      (unless (entity-defined-p world entity)
-        (setf (aref (entity-ids world) entity) 1)
-        (initialize-components entity)
-        (leave entity))
-      ;; if no empty slots found - extend the entities array
-      (finally (vector-push-extend 1 (entity-ids world))
-               (initialize-components entity)
-               (return entity)))))
+  (iter (for entity from 0 below (length (entity-ids world)))
+    ;; found an empty slot in the entities array - use it
+    (unless (entity-defined-p world entity)
+      (setf (aref (entity-ids world) entity) 1)
+      (leave entity))
+    ;; if no empty slots found - extend the entities array
+    (finally (vector-push-extend 1 (entity-ids world))
+             (return entity))))
 
 (defun remove-entity (world entity)
   "Removes the given ENTITY from the WORLD and clears out all associated components."
   (when (zerop (aref (entity-ids world) entity))
     (warn "Entity ~a not found, nothing removed.~%" entity)
     (return-from remove-entity nil))
-  (remhash entity (entity-components world))
+  (iter (for (component-type components) in-hashtable (entity-components world))
+    (setf (aref components entity) nil))
   (setf (aref (entity-ids world) entity) 0))
 
 (defun remove-entities (world &rest entities)
@@ -118,47 +112,46 @@ The second value indicates whether the query was successful."
   (iter (for e in entities)
     (remove-entity world e)))
 
-(defun cartesian-product (l)
-  "Compute the n-cartesian product of a list of sets (each of them represented as list)."
-  (if (null l)
-      (list nil)
-      ;; TODO: iter
-      (loop for x in (car l)
-            nconc (loop for y in (cartesian-product (cdr l))
-                        collect (cons x y)))))
-
+;; We may also check that the entity is really defined
 (defun component (world entity component-type)
-  "Query a COMPONENT-TYPE of the given ENTITY."
-  (let ((components (gethash entity (entity-components world))))
+  "Query a COMPONENT-TYPE of the given ENTITY.
+   The second returned values indicates whether such a COMPONENT-TYPE exists."
+  (let ((components (gethash component-type (entity-components world))))
     (if components
-        (values (gethash component-type components) t)
+        (values (aref components entity) t)
         (values nil nil))))
 
 (defun add-component (world entity component)
   "Adds a COMPONENT to the ENTITY in the WORLD."
-  (let ((components (gethash entity (entity-components world))))
-    (if components
-        (setf (gethash (type-of component) components) component)
-        (error "no entity found ~a" entity))))
+  ;; Adding a component means the following:
+  ;; Initializing the component-type if it's not there
+  ;; Extending the component array if it's too small
+  ;; Setting the component at entity index
+  (let* ((components (or (gethash (type-of component) (entity-components world))
+                         (setf (gethash (type-of component) (entity-components world))
+                               (make-array (max entity 255)
+                                           :fill-pointer 0
+                                           :adjustable t
+                                           :initial-element nil))))
+         (last-index (1- (array-total-size components))))
+    (when (> entity last-index)
+      (vector-push-extend nil components (- entity last-index)))
+    (setf (aref components entity) component)))
 
 (defun add-components (world entity &rest components)
   (iter (for c in components)
     (add-component world entity c)))
 
-(defun components (world entity)
-  "Get all components of the given entity."
-  (gethash entity (entity-components world)))
-
-(defun has-a (component world entity)
-  "Queries the COMPONENT and returns T if it's there."
-  (and (component world entity component) t))
+(defun has-a (component-type world entity)
+  "Queries the COMPONENT-TYPE and returns T if it's there."
+  (and (component world entity component-type) t))
 
 (defun remove-component (world entity component-type)
   "Removes the COMPONENT-TYPE from the ENTITY in the WORLD."
-  (let ((e-components (gethash entity (entity-components world))))
-    (remhash component-type e-components)))
+  (let ((components (gethash component-type (entity-components world))))
+    (setf (aref components entity) nil)))
 
 (defun remove-components (world entity &rest components)
-  "Removes all COMPENENTS from the ENTITY in the WORLD."
+  "Removes all COMPONENTS from the ENTITY in the WORLD."
   (iter (for c in components)
     (remove-component world entity c)))
