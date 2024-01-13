@@ -166,12 +166,13 @@
           (damage-health world collided 1)))
       (setf (v from-pos-component) new-pos))))
 
-(c:defsystem move-player (world event payload (entity pos player))
-  (declare (ignore event))
-  (handle-move world
-               (c:query world '(_ pos collider))
-               (second entity)
-               (vec2+ (v (second entity)) (direction->add-vec3 payload))))
+(defun move-player (world direction)
+  (iter
+    (for (entity pos player) in (c:query world '(entity pos player)))
+    (with colliders = (c:query world '(_ pos collider)))
+    (declare (ignorable entity player))
+    (handle-move world colliders pos
+                 (vec2+ (v pos) (direction->add-vec3 direction)))))
 
 (defun sorted-by-z (query)
   "Each position is a vec3, we reverse sort by z"
@@ -215,21 +216,31 @@
 
 (defun init-world ()
   (setf *world* (make-instance 'stone-storm-world))
-  (load-level *world* #p"assets/levels/01")
-  (c:add-system *world*
-                :move-player
-                (make-instance 'move-player)))
+  (load-level *world* #p"assets/levels/01"))
+
+;; The way we should do interaction is by binding a key to a fuction
+;; that would itself call key-case and determine what to do
+(defun interact-with (world)
+  (declare (ignore world))
+  (blt:key-case
+   (blt:read)
+   (:left nil)
+   (:right nil)
+   (:up nil)
+   (:down nil)))
 
 (defun run ()
   (draw *world*)
-  (blt:key-case (blt:read)
-                (:escape (return-from run))
-                (:close (return-from run))
-                (:r (init-world))
-                (:left (c:tick-event *world* :move-player :left))
-                (:right (c:tick-event *world* :move-player :right))
-                (:up (c:tick-event *world* :move-player :up))
-                (:down (c:tick-event *world* :move-player :down)))
+  (blt:key-case
+   (blt:read)
+   (:escape (return-from run))
+   (:close (return-from run))
+   (:r (init-world))
+   (:space (interact-with *world*))
+   (:left (move-player *world* :left))
+   (:right (move-player *world* :right))
+   (:up (move-player *world* :up))
+   (:down (move-player *world* :down)))
   (run))
 
 (defun start ()
