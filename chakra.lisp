@@ -5,7 +5,6 @@
   (:export
    #:world
    #:query
-   #:resource
    #:make-entity
    #:remove-entity
    #:remove-entities
@@ -13,10 +12,6 @@
    #:add-components
    #:remove-component
    #:remove-components
-   #:add-resource
-   #:add-resources
-   #:remove-resource
-   #:remove-resources
    #:component
    #:components
    #:has-a))
@@ -34,11 +29,7 @@
                               :element-type 'bit
                               :initial-element 0)
     :accessor entity-ids
-    :documentation "An array of all entity ids.")
-   (resources
-    :initform (make-hash-table)
-    :accessor resources
-    :documentation "A hash table from resource type to its value."))
+    :documentation "An array of all entity ids."))
   (:documentation "Handles the entities. Hash tables are used to enforce uniqueness."))
 
 (defclass component () ()
@@ -171,25 +162,3 @@ The second value indicates whether the query was successful."
   "Removes all COMPENENTS from the ENTITY in the WORLD."
   (iter (for c in components)
     (remove-component world entity c)))
-
-(defun get-resource (world resource-type)
-  "Gets the resource object by its type from the WORLD."
-  (gethash resource-type (resources world)))
-
-(defun add-resource (world resource)
-  "Adds the RESOURCE to the WORLD."
-  (setf (gethash (type-of resource) (resources world)) resource))
-
-(defun add-resources (world &rest resources)
-  "Adds all RESOURCES to the WORLD."
-  (iter (for r in resources)
-    (add-resource world r)))
-
-(defun remove-resource (world resource)
-  "Removes the RESOURCE from the WORLD."
-  (remhash (type-of resource) (resources world)))
-
-(defun remove-resources (world &rest resources)
-  "Removes all REOUSRCES from the WORLD."
-  (iter (for r in resources)
-    (remove-resource world r)))
