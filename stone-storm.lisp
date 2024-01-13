@@ -124,10 +124,8 @@
     (when (equal-coordinates-p pos (v (funcall get-position entity)))
       (return (first entity)))))
 
-(deftype direction () '(member :up :down :left :right))
 (defun direction->add-vec3 (direction)
-  (declare (type direction direction))
-  (case direction
+  (ecase direction
     ((:up) #v(0 -1 0))
     ((:down) #v(0 1 0))
     ((:left) #v(-1 0 0))
