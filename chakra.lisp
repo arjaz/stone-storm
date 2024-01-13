@@ -81,11 +81,11 @@ are indeed associated with that ENTITY in the given WORLD."
 
 (defun query (world query)
   "Extract the list with the data of matching components based on the QUERY.
-The second value indicates whether the query was succesful.
-
-E.g. a query '(_ position health) would return a list of matched entities:
-'((0 pos-0 health-0)
-  (1 pos-1 health-1))"
+   The second value indicates whether the query was succesful.
+   You can also pass in (not component) to fetch only entities that don't have it.
+   E.g. a query '(_ position health) would return a list of matched entities:
+   '((0 pos-0 health-0)
+     (1 pos-1 health-1))"
   (iter (for entity from 0 below (length (entity-ids world)))
     (when (and (entity-defined-p world entity)
                (negative-dependencies-satisfied-p world entity query))
@@ -136,7 +136,6 @@ The second value indicates whether the query was successful."
             nconc (loop for y in (cartesian-product (cdr l))
                         collect (cons x y)))))
 
-;; TODO: setf interface for all the things, setf with nil to delete?
 (defun component (world entity component-type)
   "Query a COMPONENT-TYPE of the given ENTITY."
   (let ((components (gethash entity (entity-components world))))
