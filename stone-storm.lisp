@@ -209,7 +209,7 @@
   (blt:refresh))
 
 (defun configure-window ()
-  (blt:set "window.resizeable = true")
+  (blt:set "window.resizeable = false")
   (blt:set "window.size = ~Ax~A" *screen-width* *screen-height*)
   (blt:set "window.title = Store Storm"))
 
