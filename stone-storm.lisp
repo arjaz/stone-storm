@@ -67,17 +67,17 @@
       (c:add-component world enemy (make-instance 'named :name name)))
     enemy))
 
-(defun place-enemy-grower (world x y)
-  (let ((enemy (place-enemy world x y #\G :name "Grower"))
-        (growth (c:make-entity world)))
+(defun place-enemy-pillar (world x y)
+  (let ((enemy (place-enemy world x y #\P :name "Moving pillar"))
+        (pillar (c:make-entity world)))
     (c:add-components
-     world growth
-     (make-instance 'named :name "Growth")
+     world pillar
+     (make-instance 'named :name "Stone pillar")
      (make-instance 'collider)
-     (make-instance 'tile :tile #\$))
+     (make-instance 'tile :tile #\O))
     (c:add-component
      world enemy
-     (make-instance 'inventory :items (list growth)))))
+     (make-instance 'inventory :items (list pillar)))))
 
 (defun place-wall (world x y)
   (c:add-components
@@ -108,7 +108,7 @@
         ((#\#) (place-wall world x y))
         ((#\+) (place-closed-door world x y))
         ((#\@) (place-player world x y))
-        ((#\G) (place-enemy-grower world x y))
+        ((#\P) (place-enemy-pillar world x y))
         ((#\g) (place-enemy world x y #\g :name "Goblin"))))))
 
 (defun in-world-map-p (pos)
