@@ -6,20 +6,13 @@
    #:world
    #:query
    #:resource
-   #:system
-   #:defsystem
    #:make-entity
    #:remove-entity
    #:remove-entities
-   #:tick-event
    #:add-component
    #:add-components
    #:remove-component
    #:remove-components
-   #:add-system
-   #:add-systems
-   #:remove-system
-   #:remove-systems
    #:add-resource
    #:add-resources
    #:remove-resource
@@ -33,7 +26,6 @@
 (defclass world ()
   ((entity-components
     :initform (make-hash-table)
-    :type hash-table
     :accessor entity-components
     :documentation "A hash table from the entity id to its components - hash tables from the component types to their data.")
    (entity-ids
@@ -41,34 +33,18 @@
                               :adjustable t
                               :element-type 'bit
                               :initial-element 0)
-    :type array
     :accessor entity-ids
     :documentation "An array of all entity ids.")
-   (systems
-    :initform (make-hash-table)
-    :type hash-table
-    :accessor systems
-    :documentation "A hash table from the event type to the systems - hash tables from the system type to the system object.")
    (resources
     :initform (make-hash-table)
-    :type hash-table
     :accessor resources
     :documentation "A hash table from resource type to its value."))
-  (:documentation "Handles the entities and the systems. Hash tables are used to enforce uniqueness."))
+  (:documentation "Handles the entities. Hash tables are used to enforce uniqueness."))
 
 (defclass component () ()
   (:documentation "A base class for user-defined components"))
 (defclass resource () ()
   (:documentation "A base class for user-defined resources"))
-
-(defclass system ()
-  ((queries
-    :initarg :queries
-    :type list
-    :accessor system-queries
-    :documentation "The list of queries of the given system.
-A query is a list where the first element is the name,
-and the rest are either component names or lists of two elements of form (not component-name).")))
 
 (defun query-positive-dependencies (query)
   "Extract the dependencies of the QUERY which must be present."
@@ -78,36 +54,12 @@ and the rest are either component names or lists of two elements of form (not co
   "Extract the dependencies of the QUERY which must not be present."
   (mapcar #'second (remove-if #'symbolp (rest query))))
 
-(defgeneric tick-system-fn (system))
-(defmacro defsystem (name (&rest queries) &body body)
-  "Create a system with a NAME.
-Creates a class to store the QUERIES, and a function to run the BODY.
-The first argument of the function must be the world, and the second must be the event."
-  (let ((world-name   (first queries))
-        (event-name   (second queries))
-        (payload-name (third queries))
-        (query-names  (iter (for query in (rest (rest (rest queries))))
-                        (collect (first query)))))
-    `(progn
-       ;; TODO: query-names destructuring
-       (defun ,name (,world-name ,event-name ,payload-name ,@query-names) ,@body)
-       (defclass ,name (system) ()
-         (:default-initargs
-          :queries ',(rest (rest (rest queries)))))
-       (defmethod tick-system-fn ((s ,name))
-         (declare (ignore s))
-         (symbol-function (quote ,name))))))
-
-(defun in-hash-table-p (key hash-table)
-  "T if the KEY is in the HASH-TABLE."
-  (nth-value 1 (gethash key hash-table)))
-
 (defun negative-dependencies-satisfied-p (world entity query)
   "Check if the negative component dependencies of the QUERY which must not be present in the ENTITY
 are indeed not associated with that ENTITY in the given WORLD."
   (let ((components (gethash entity (entity-components world))))
     (iter (for component-type in (query-negative-dependencies query))
-      (when (in-hash-table-p component-type components)
+      (when (nth-value 1 (gethash component-type components))
         (leave))
       (finally (return t)))))
 
@@ -182,20 +134,6 @@ The second value indicates whether the query was successful."
             nconc (loop for y in (cartesian-product (cdr l))
                         collect (cons x y)))))
 
-(defun tick-system (world system event &optional payload)
-  "Tick the SYSTEM of the WORLD with the passed event and the payload.
-Runs the system against all components matching the query of the SYSTEM."
-  (let ((queried-data (iter (for query in (system-queries system))
-                        (collect (query world query)))))
-    ;; TODO: skip if any two of them are the same
-    (iter (for args in (cartesian-product queried-data))
-      (apply (tick-system-fn system) world event payload args))))
-
-(defun tick-event (world event &optional payload)
-  "Tick all systems subscribed to the EVENT in the WORLD with the PAYLOAD."
-  (iter (for (system-type system) in-hashtable (gethash event (systems world)))
-    (tick-system world system event payload)))
-
 ;; TODO: setf interface for all the things, setf with nil to delete?
 (defun component (world entity component-type)
   "Query a COMPONENT-TYPE of the given ENTITY."
@@ -232,31 +170,6 @@ Runs the system against all components matching the query of the SYSTEM."
   "Removes all COMPENENTS from the ENTITY in the WORLD."
   (iter (for c in components)
     (remove-component world entity c)))
-
-(defun add-system (world event system)
-  "Creates a SYSTEM in the WORLD fired after the EVENT."
-  (unless (in-hash-table-p event (systems world))
-    (setf (gethash event (systems world)) (make-hash-table)))
-  (setf (gethash (type-of system) (gethash event (systems world))) system))
-
-(defun add-systems (world event &rest systems)
-  "Add all SYSTEMS to the WORLD fired after the EVENT.."
-  (iter (for s in systems)
-    (add-system world event s)))
-
-(defun remove-system (world event system)
-  "Removes the SYSTEM bound to the EVENT from the WORLD."
-  (when (in-hash-table-p event (systems world))
-    (remhash (type-of system) (gethash event (systems world)))))
-
-(defun remove-systems (world event &rest systems)
-  "Removes all SYSTEMS bound to the EVENT from the world"
-  (iter (for s in systems)
-    (remove-system world event s)))
-
-(defun get-system (world event system-type)
-  "Gets the system object by its type and event from the WORLD."
-  (gethash system-type (gethash event (systems world))))
 
 (defun get-resource (world resource-type)
   "Gets the resource object by its type from the WORLD."
