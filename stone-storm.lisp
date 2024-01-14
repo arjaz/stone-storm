@@ -97,7 +97,7 @@
         ((#\+) (place-closed-door world x y))
         ((#\@) (place-player world x y))
         ((#\P) (place-enemy-pillar world x y))
-        ((#\g) (place-enemy world x y #\g :name "Goblin"))))))
+        ((#\g) (place-enemy world x y #\g :name "Grave robber"))))))
 
 (defun in-world-map-p (pos)
   (and (<= 0 (aref pos 0) (1- *viewport-width*))
@@ -173,13 +173,6 @@
     (handle-move world colliders pos
                  (vec3+ (v pos) (direction->add-vec3 direction)))))
 
-(defun sorted-by-z (query)
-  "Each position is a vec3, we reverse sort by z"
-  (r:safe-sort
-   query
-   (lambda (e1 e2)
-     (> (aref (v (first e1)) 2) (aref (v (first e2)) 2)))))
-
 (defun render-tile (position tile)
   (setf (blt:color)
         (blt:white)
@@ -187,6 +180,7 @@
         tile))
 
 (defclass main-game-mode () ())
+
 (defmethod handle-input ((mode main-game-mode) world key)
   (blt:key-case
    key
@@ -203,6 +197,14 @@
    (:right (move-player world :right))
    (:up (move-player world :up))
    (:down (move-player world :down))))
+
+(defun sorted-by-z (query)
+  "Each position is a vec3, we reverse sort by z"
+  (r:safe-sort
+   query
+   (lambda (e1 e2)
+     (> (aref (v (first e1)) 2) (aref (v (first e2)) 2)))))
+
 (defmethod render ((mode main-game-mode) world)
   (iter
     (for (position . entities)
