@@ -112,7 +112,7 @@ The second value indicates whether the query was successful."
   (iter (for e in entities)
     (remove-entity world e)))
 
-;; We may also check that the entity is really defined
+;; TODO: We may also check that the entity is really defined
 (defun component (world entity component-type)
   "Query a COMPONENT-TYPE of the given ENTITY.
    The second returned values indicates whether such a COMPONENT-TYPE exists."

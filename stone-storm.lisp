@@ -11,10 +11,15 @@
 (defparameter *viewport-height* (- *screen-height* *message-height*))
 
 (defparameter *debug* t)
+(defvar *running*)
 (defvar *world*)
 
 (defclass stone-storm-world (c:world)
-  ((logs :accessor logs :initarg :logs :initform nil)))
+  ((modes :accessor modes :initarg :modes :initform nil)
+   (logs :accessor logs :initarg :logs :initform nil)))
+
+(defgeneric handle-input (mode world key))
+(defgeneric render (mode world))
 
 (defun push-log (world msg)
   (push msg (logs world)))
@@ -90,7 +95,7 @@
 (defun place-closed-door (world x y)
   (c:add-components
    world (c:make-entity world)
-   (make-instance 'named :name "Door")
+   (make-instance 'named :name "Closed door")
    (make-instance 'collider)
    (make-instance 'door)
    (make-instance 'tile :tile #\+)
@@ -123,6 +128,12 @@
   (iter (for entity in query)
     (when (equal-coordinates-p pos (v (funcall get-position entity)))
       (return (first entity)))))
+
+(defun entities-at (pos query &key (get-position #'second))
+  "Returns all entities at the given coordinates in the query."
+  (iter (for entity in query)
+    (when (equal-coordinates-p pos (v (funcall get-position entity)))
+      (collect (first entity)))))
 
 (defun direction->add-vec3 (direction)
   (ecase direction
@@ -190,7 +201,24 @@
         (blt:cell-char (aref position 0) (aref position 1))
         tile))
 
-(defun render-world (world)
+(defclass main-game-mode () ())
+(defmethod handle-input ((mode main-game-mode) world key)
+  (blt:key-case
+   key
+   (:escape (setf *running* nil))
+   (:close (setf *running* nil))
+   (:r (init-world))
+   (:l
+    (let* ((player-pos (second (first (c:query *world* '(_ pos player)))))
+           (mode (make-instance 'lookup-mode
+                                :crosshair-pos (make-instance 'pos :v (copy-vec3 (v player-pos))))))
+      (enter-mode world mode)
+      (describe-at-crosshair world (crosshair-pos mode))))
+   (:left (move-player world :left))
+   (:right (move-player world :right))
+   (:up (move-player world :up))
+   (:down (move-player world :down))))
+(defmethod render ((mode main-game-mode) world)
   (iter
     (for (position . entities)
          in (group-by
@@ -198,6 +226,46 @@
              :test #'equal-coordinates-p
              :key (lambda (e) (vec3->vec2 (v (second e))))))
     (render-tile position (tile (second (first entities))))))
+
+(defun move-crosshair (crosshair-pos direction)
+  (let ((new-pos (vec3+ (v crosshair-pos)
+                        (direction->add-vec3 direction))))
+    (when (in-world-map-p new-pos)
+      (setf (v crosshair-pos) new-pos))))
+
+(defun describe-at-crosshair (world crosshair-pos)
+  (iter
+    (for entity in (entities-at (v crosshair-pos) (c:query world '(_ pos))))
+    (for name = (r:if-let (named (c:component world entity 'named))
+                  (name named)
+                  (format nil "#~a" entity)))
+    (push-log world (format nil "Looking at ~a" name))))
+
+(defclass lookup-mode () ((crosshair-pos :accessor crosshair-pos :initarg :crosshair-pos)))
+
+(defmethod handle-input ((mode lookup-mode) world key)
+  (blt:key-case
+   key
+   (:q (leave-mode world))
+   (:escape (leave-mode world))
+   (:left
+    (move-crosshair (crosshair-pos mode) :left)
+    (describe-at-crosshair world (crosshair-pos mode)))
+   (:right
+    (move-crosshair (crosshair-pos mode) :right)
+    (describe-at-crosshair world (crosshair-pos mode)))
+   (:up
+    (move-crosshair (crosshair-pos mode) :up)
+    (describe-at-crosshair world (crosshair-pos mode)))
+   (:down
+    (move-crosshair (crosshair-pos mode) :down)
+    (describe-at-crosshair world (crosshair-pos mode)))))
+
+(defmethod render ((mode lookup-mode) world)
+  (let ((half-a-second 500000)
+        (crosshair (crosshair-pos mode)))
+    (when (oddp (floor (get-internal-real-time) half-a-second))
+      (render-tile (v crosshair) #\·))))
 
 (defun render-logs (logs)
   (iter (for msg in-sequence logs with-index i)
@@ -208,7 +276,8 @@
 
 (defun draw (world)
   (blt:clear)
-  (render-world world)
+  (iter (for mode in (reverse (modes world)))
+    (render mode world))
   (render-logs (logs world))
   (blt:refresh))
 
@@ -219,35 +288,25 @@
 
 (defun init-world ()
   (setf *world* (make-instance 'stone-storm-world))
+  (enter-mode *world* (make-instance 'main-game-mode))
   (load-level *world* #p"assets/levels/01"))
 
-;; The way we should do interaction is by binding a key to a fuction
-;; that would itself call key-case and determine what to do
-(defun interact-with (world)
-  (declare (ignore world))
-  (blt:key-case
-   (blt:read)
-   (:left nil)
-   (:right nil)
-   (:up nil)
-   (:down nil)))
+(defun enter-mode (world mode)
+  (push mode (modes world)))
+
+(defun leave-mode (world)
+  (pop (modes world)))
 
 (defun run ()
-  (draw *world*)
-  (blt:key-case
-   (blt:read)
-   (:escape (return-from run))
-   (:close (return-from run))
-   (:r (init-world))
-   (:space (interact-with *world*))
-   (:left (move-player *world* :left))
-   (:right (move-player *world* :right))
-   (:up (move-player *world* :up))
-   (:down (move-player *world* :down)))
-  (run))
+  (when *running*
+    (draw *world*)
+    (when (blt:has-input-p)
+      (handle-input (first (modes *world*)) *world* (blt:read)))
+    (run)))
 
 (defun start ()
   (init-world)
+  (setf *running* t)
   (blt:with-terminal
     (configure-window)
     (run)))
