@@ -32,6 +32,7 @@
 (defclass health (c:component) ((health :accessor health :initarg :health)))
 (defclass named (c:component) ((name :accessor name :initarg :name)))
 (defclass inventory (c:component) ((items :accessor items :initarg :items)))
+(defclass wall (c:component) () (:documentation "Used to render the walls nicely."))
 
 (defun place-player (world x y)
   (c:add-components
@@ -72,6 +73,7 @@
    world (c:make-entity world)
    (make-instance 'named :name "Wall")
    (make-instance 'collider)
+   (make-instance 'wall)
    (make-instance 'tile :tile #\#)
    (make-instance 'pos :v #v(x y 1))))
 
@@ -198,6 +200,42 @@
    (:up (move-player world :up))
    (:down (move-player world :down))))
 
+(defun wall-bitmap (world position)
+  (let ((walls (c:query world '(_ pos wall)))
+        (v-pos (v position))
+        (bitmap 0))
+    (when (entity-at (vec3+ v-pos #(0 -1 0)) walls)
+      (incf bitmap #b0001))
+    (when (entity-at (vec3+ v-pos #(0 1 0)) walls)
+      (incf bitmap #b0010))
+    (when (entity-at (vec3+ v-pos #(-1 0 0)) walls)
+      (incf bitmap #b0100))
+    (when (entity-at (vec3+ v-pos #(1 0 0)) walls)
+      (incf bitmap #b1000))
+    bitmap))
+
+(defun wall-bitmap->tile (bitmap)
+  (case bitmap
+    ((#b0000) #\○)
+    ((#b0001) #\○)
+    ((#b0010) #\○)
+    ((#b0011) #\║)
+    ((#b0100) #\○)
+    ((#b0101) #\╝)
+    ((#b0110) #\╗)
+    ((#b0111) #\╣)
+    ((#b1000) #\○)
+    ((#b1001) #\╚)
+    ((#b1010) #\╔)
+    ((#b1011) #\╠)
+    ((#b1100) #\═)
+    ((#b1101) #\╩)
+    ((#b1110) #\╦)
+    ((#b1111) #\╬)))
+
+(defun render-wall (world position)
+  (render-tile (v position) (wall-bitmap->tile (wall-bitmap world position))))
+
 (defun sorted-by-z (query)
   "Each position is a vec3, we reverse sort by z"
   (r:safe-sort
@@ -214,8 +252,9 @@
                     :key (lambda (e) (vec3->vec2 (v (second e))))))
     (for entry in sorted)
     (for (entity pos tile) = (second entry))
-    (declare (ignorable entity))
-    (render-tile (v pos) (tile tile))))
+    (if (c:has-a 'wall world entity)
+        (render-wall world pos)
+        (render-tile (v pos) (tile tile)))))
 
 (defun move-crosshair (crosshair-pos direction)
   (let ((new-pos (vec3+ (v crosshair-pos)
