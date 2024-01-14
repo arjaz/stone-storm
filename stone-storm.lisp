@@ -207,12 +207,15 @@
 
 (defmethod render ((mode main-game-mode) world)
   (iter
-    (for (position . entities)
-         in (group-by
-             (c:query world '(_ pos tile))
-             :test #'equal-coordinates-p
-             :key (lambda (e) (vec3->vec2 (v (second e))))))
-    (render-tile position (tile (second (first entities))))))
+    (with sorted = (group-by
+                    (c:query world '(_ pos tile))
+                    :test #'equal-coordinates-p
+                    :value #'identity
+                    :key (lambda (e) (vec3->vec2 (v (second e))))))
+    (for entry in sorted)
+    (for (entity pos tile) = (second entry))
+    (declare (ignorable entity))
+    (render-tile (v pos) (tile tile))))
 
 (defun move-crosshair (crosshair-pos direction)
   (let ((new-pos (vec3+ (v crosshair-pos)
