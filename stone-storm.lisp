@@ -186,7 +186,7 @@
     (with colliders = (c:query world '(_ pos collider)))
     (declare (ignorable entity player))
     (handle-move world colliders pos
-                 (vec2+ (v pos) (direction->add-vec3 direction)))))
+                 (vec3+ (v pos) (direction->add-vec3 direction)))))
 
 (defun sorted-by-z (query)
   "Each position is a vec3, we reverse sort by z"
