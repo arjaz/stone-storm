@@ -144,12 +144,14 @@
 
 (defun open-door (world door)
   (c:remove-component world door 'collider)
-  (c:add-component world door
-                   (make-instance 'tile :tile #\…)))
+  (c:add-components world door
+                    (make-instance 'named :name "Opened door")
+                    (make-instance 'tile :tile #\…)))
 
 (defun close-door (world door)
   (c:add-components world door
                     (make-instance 'collider)
+                    (make-instance 'named :named "Closed door")
                     (make-instance 'tile :tile #\+)))
 
 (defun kill-entity (world entity name)
