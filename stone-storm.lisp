@@ -117,8 +117,8 @@
         ((#\g) (place-enemy world x y #\g :name "Goblin"))))))
 
 (defun in-world-map-p (pos)
-  (and (<= 0 (aref pos 0) *viewport-width*)
-       (<= 0 (aref pos 1) *viewport-height*)))
+  (and (<= 0 (aref pos 0) (1- *viewport-width*))
+       (<= 0 (aref pos 1) (1- *viewport-height*))))
 
 (defun equal-coordinates-p (pos1 pos2)
   (equalp (vec3->vec2 pos1) (vec3->vec2 pos2)))
