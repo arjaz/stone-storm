@@ -24,23 +24,6 @@
 (defun push-log (world msg)
   (push msg (logs world)))
 
-(defun copy-vec3 (v)
-  #v((aref v 0)
-     (aref v 1)
-     (aref v 2)))
-
-(defun vec2+ (v1 v2)
-  #v((+ (aref v1 0) (aref v2 0))
-     (+ (aref v1 1) (aref v2 1))))
-
-(defun vec3+ (v1 v2)
-  #v((+ (aref v1 0) (aref v2 0))
-     (+ (aref v1 1) (aref v2 1))
-     (+ (aref v1 2) (aref v2 2))))
-
-(defun vec3->vec2 (v)
-  #v((aref v 0) (aref v 1)))
-
 (defclass pos (c:component) ((v :accessor v :initarg :v)))
 (defclass tile (c:component) ((tile :accessor tile :initarg :tile)))
 (defclass player (c:component) ())

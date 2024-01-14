@@ -13,6 +13,7 @@
                #:group-by
                #:cl-blt)
   :components ((:file "package")
+               (:file "linalg")
                (:file "stone-storm")))
 
 (asdf:defsystem #:chakra
