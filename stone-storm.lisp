@@ -181,6 +181,9 @@
         (blt:cell-char (aref position 0) (aref position 1))
         tile))
 
+(defun render-string (position string)
+  (blt:print (aref position 0) (aref position 1) string))
+
 (defclass main-game-mode () ())
 
 (defmethod handle-input ((mode main-game-mode) world key)
@@ -255,7 +258,9 @@
     (for (entity pos tile) = (second entry))
     (if (c:has-a 'wall world entity)
         (render-wall world pos)
-        (render-tile (v pos) (tile tile)))))
+        (render-tile (v pos) (tile tile))))
+  (when (equal mode (first (modes world)))
+    (render-logs (logs world))))
 
 (defun move-crosshair (crosshair-pos direction)
   (let ((new-pos (vec3+ (v crosshair-pos)
@@ -265,11 +270,12 @@
 
 (defun describe-at-crosshair (world crosshair-pos)
   (iter
-    (for entity in (entities-at (v crosshair-pos) (c:query world '(_ pos))))
+    (for entity in-sequence (entities-at (v crosshair-pos) (c:query world '(_ pos)))
+         with-index i)
     (for name = (r:if-let (named (c:component world entity 'named))
                   (name named)
                   (format nil "#~a" entity)))
-    (push-log world (format nil "Looking at ~a" name))))
+    (render-string #v(0 (+ i *viewport-height*)) (format nil "Looking at ~a" name))))
 
 (defclass lookup-mode ()
   ((crosshair-pos :accessor crosshair-pos :initarg :crosshair-pos)
@@ -285,20 +291,16 @@
    (:left
     (move-crosshair (crosshair-pos mode) :left)
     ;; We reset the time when we move the crosshair
-    (setf (crosshair-start-time mode) (get-internal-real-time))
-    (describe-at-crosshair world (crosshair-pos mode)))
+    (setf (crosshair-start-time mode) (get-internal-real-time)))
    (:right
     (move-crosshair (crosshair-pos mode) :right)
-    (setf (crosshair-start-time mode) (get-internal-real-time))
-    (describe-at-crosshair world (crosshair-pos mode)))
+    (setf (crosshair-start-time mode) (get-internal-real-time)))
    (:up
     (move-crosshair (crosshair-pos mode) :up)
-    (setf (crosshair-start-time mode) (get-internal-real-time))
-    (describe-at-crosshair world (crosshair-pos mode)))
+    (setf (crosshair-start-time mode) (get-internal-real-time)))
    (:down
     (move-crosshair (crosshair-pos mode) :down)
-    (setf (crosshair-start-time mode) (get-internal-real-time))
-    (describe-at-crosshair world (crosshair-pos mode)))))
+    (setf (crosshair-start-time mode) (get-internal-real-time)))))
 
 (defmethod render ((mode lookup-mode) world)
   (let ((half-a-second 500000)
@@ -306,7 +308,8 @@
         (mode-start-time (crosshair-start-time mode))
         (current-time (get-internal-real-time)))
     (when (evenp (floor (- current-time mode-start-time) half-a-second))
-      (render-tile (v crosshair) #\·))))
+      (render-tile (v crosshair) #\·)))
+  (describe-at-crosshair world (crosshair-pos mode)))
 
 (defun render-logs (logs)
   (iter (for msg in-sequence logs with-index i)
@@ -319,7 +322,6 @@
   (blt:clear)
   (iter (for mode in (reverse (modes world)))
     (render mode world))
-  (render-logs (logs world))
   (blt:refresh))
 
 (defun configure-window ()
