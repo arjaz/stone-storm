@@ -18,9 +18,6 @@
   ((modes :accessor modes :initarg :modes :initform nil)
    (logs :accessor logs :initarg :logs :initform nil)))
 
-(defgeneric handle-input (mode world key))
-(defgeneric render (mode world))
-
 (defun push-log (world msg)
   (push msg (logs world)))
 
@@ -175,6 +172,9 @@
     (handle-move world colliders pos
                  (vec3+ (v pos) (direction->add-vec3 direction)))))
 
+(defgeneric render (mode world))
+(defgeneric handle-input (mode world key))
+
 (defun render-tile (position tile)
   (setf (blt:color)
         (blt:white)
@@ -192,7 +192,8 @@
    (:l
     (let* ((player-pos (second (first (c:query *world* '(_ pos player)))))
            (mode (make-instance 'lookup-mode
-                                :crosshair-pos (make-instance 'pos :v (copy-vec3 (v player-pos))))))
+                                :crosshair-pos (make-instance 'pos :v (copy-vec3 (v player-pos)))
+                                :crosshair-start-time (get-internal-real-time))))
       (enter-mode world mode)
       (describe-at-crosshair world (crosshair-pos mode))))
    (:left (move-player world :left))
@@ -270,7 +271,11 @@
                   (format nil "#~a" entity)))
     (push-log world (format nil "Looking at ~a" name))))
 
-(defclass lookup-mode () ((crosshair-pos :accessor crosshair-pos :initarg :crosshair-pos)))
+(defclass lookup-mode ()
+  ((crosshair-pos :accessor crosshair-pos :initarg :crosshair-pos)
+   (crosshair-start-time
+    :accessor crosshair-start-time :initarg :crosshair-start-time
+    :documentation "Used for blinking the crosshair")))
 
 (defmethod handle-input ((mode lookup-mode) world key)
   (blt:key-case
@@ -279,21 +284,28 @@
    (:escape (leave-mode world))
    (:left
     (move-crosshair (crosshair-pos mode) :left)
+    ;; We reset the time when we move the crosshair
+    (setf (crosshair-start-time mode) (get-internal-real-time))
     (describe-at-crosshair world (crosshair-pos mode)))
    (:right
     (move-crosshair (crosshair-pos mode) :right)
+    (setf (crosshair-start-time mode) (get-internal-real-time))
     (describe-at-crosshair world (crosshair-pos mode)))
    (:up
     (move-crosshair (crosshair-pos mode) :up)
+    (setf (crosshair-start-time mode) (get-internal-real-time))
     (describe-at-crosshair world (crosshair-pos mode)))
    (:down
     (move-crosshair (crosshair-pos mode) :down)
+    (setf (crosshair-start-time mode) (get-internal-real-time))
     (describe-at-crosshair world (crosshair-pos mode)))))
 
 (defmethod render ((mode lookup-mode) world)
   (let ((half-a-second 500000)
-        (crosshair (crosshair-pos mode)))
-    (when (oddp (floor (get-internal-real-time) half-a-second))
+        (crosshair (crosshair-pos mode))
+        (mode-start-time (crosshair-start-time mode))
+        (current-time (get-internal-real-time)))
+    (when (evenp (floor (- current-time mode-start-time) half-a-second))
       (render-tile (v crosshair) #\·))))
 
 (defun render-logs (logs)
