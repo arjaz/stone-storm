@@ -111,8 +111,8 @@
 (defun entity-at (pos query &key (get-position #'second))
   "Returns any entity at the given coordinates in the query."
   (iter (for entity in query)
-    (when (equal-coordinates-p pos (v (funcall get-position entity)))
-      (return (first entity)))))
+    (for entity-pos = (v (funcall get-position entity)))
+    (finding (first entity) such-that (equal-coordinates-p pos entity-pos))))
 
 (defun entities-at (pos query &key (get-position #'second))
   "Returns all entities at the given coordinates in the query."
