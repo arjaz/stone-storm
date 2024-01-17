@@ -23,7 +23,7 @@
     :accessor entity-components
     :documentation "A hash table from component types to arrays of components.")
    (entity-ids
-    :initform (make-array 255 :fill-pointer 0
+    :initform (make-array 255 :fill-pointer 255
                               :adjustable t
                               :element-type 'bit
                               :initial-element 0)
@@ -89,14 +89,17 @@ The second value indicates whether the query was successful."
 
 (defun make-entity (world)
   "Inserts a new empty entity into the WORLD and returns it."
-  (iter (for entity from 0 below (length (entity-ids world)))
-    ;; found an empty slot in the entities array - use it
-    (unless (entity-defined-p world entity)
-      (setf (aref (entity-ids world) entity) 1)
-      (leave entity))
-    ;; if no empty slots found - extend the entities array
-    (finally (vector-push-extend 1 (entity-ids world))
-             (return entity))))
+  (let ((ids (entity-ids world)))
+    (declare (type (array bit) ids))
+    (iter (for entity from 0 below (length ids))
+      ;; found an empty slot in the entities array - use it
+      (when (zerop (aref ids entity))
+        (setf (aref ids entity) 1)
+        (leave entity))
+      ;; if no empty slots found - extend the entities array
+      (finally
+       (vector-push-extend 1 ids entity)
+       (return entity)))))
 
 (defun remove-entity (world entity)
   "Removes the given ENTITY from the WORLD and clears out all associated components."
