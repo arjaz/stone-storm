@@ -135,7 +135,7 @@ The second value indicates whether the query was successful."
                                            :initial-element nil))))
          (last-index (1- (array-total-size components))))
     (when (> entity last-index)
-      (vector-push-extend nil components (- entity last-index)))
+      (adjust-array components (floor (* entity 1.5))))
     (setf (aref components entity) component)))
 
 (defun add-components (world entity &rest components)
@@ -155,3 +155,4 @@ The second value indicates whether the query was successful."
   "Removes all COMPONENTS from the ENTITY in the WORLD."
   (iter (for c in components)
     (remove-component world entity c)))
+
