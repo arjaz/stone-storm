@@ -134,8 +134,13 @@
 (defun close-door (world door)
   (c:add-components world door
                     (make-instance 'collider)
-                    (make-instance 'named :named "Closed door")
+                    (make-instance 'named :name "Closed door")
                     (make-instance 'tile :tile #\+)))
+
+(defun toggle-door (world door)
+  (if (c:has-a 'collider world door)
+    (open-door world door)
+    (close-door world door)))
 
 (defun kill-entity (world entity name)
   (push-log world (format nil "~a died" name))
@@ -185,21 +190,31 @@
 (defun render-string (position string)
   (blt:print (aref position 0) (aref position 1) string))
 
+(defun render-at-message-box (line string)
+  (render-string #v(0 (+ line *viewport-height*)) string))
+
 (defclass main-game-mode () ())
+
+(defun enter-lookup-mode (world)
+  (let* ((player-pos (second (first (c:query world '(_ pos player)))))
+         (mode (make-instance 'lookup-mode
+                              :crosshair-pos (make-instance 'pos :v (copy-vec3 (v player-pos)))
+                              :crosshair-start-time (get-internal-real-time))))
+    (enter-mode world mode)
+    (describe-at-crosshair world (crosshair-pos mode))))
+
+(defun enter-interaction-mode (world)
+  (enter-mode world (make-instance 'interaction-mode)))
 
 (defmethod handle-input ((mode main-game-mode) world key)
   (blt:key-case
    key
+   (:q (setf *running* nil))
    (:escape (setf *running* nil))
    (:close (setf *running* nil))
    (:r (init-world))
-   (:l
-    (let* ((player-pos (second (first (c:query *world* '(_ pos player)))))
-           (mode (make-instance 'lookup-mode
-                                :crosshair-pos (make-instance 'pos :v (copy-vec3 (v player-pos)))
-                                :crosshair-start-time (get-internal-real-time))))
-      (enter-mode world mode)
-      (describe-at-crosshair world (crosshair-pos mode))))
+   (:l (enter-lookup-mode world))
+   (:space (enter-interaction-mode world))
    (:left (move-player world :left))
    (:right (move-player world :right))
    (:up (move-player world :up))
@@ -257,11 +272,54 @@
                     :key (lambda (e) (vec3->vec2 (v (second e))))))
     (for entry in sorted)
     (for (entity pos tile) = (second entry))
+    ;; TODO: Control it if the player has glasses equipped
     (if (c:has-a 'wall world entity)
         (render-wall world pos)
         (render-tile (v pos) (tile tile))))
   (when (equal mode (first (modes world)))
     (render-logs (logs world))))
+
+(defclass interaction-mode () ())
+
+(defun interact-with (world direction)
+  (iter
+    (for (entity pos player) in (c:query world '(_ pos player)))
+    (with entities-with-positions = (c:query world '(_ pos)))
+    (for target-position = (vec3+ (v pos) (direction->add-vec3 direction)))
+    (declare (ignorable entity player))
+    (when (in-world-map-p target-position)
+      (r:when-let (targetted (entity-at target-position entities-with-positions))
+        (cond
+          ((c:has-a 'door world targetted)
+           (toggle-door world targetted)))))))
+
+(defmethod handle-input ((mode interaction-mode) world key)
+  (blt:key-case
+   key
+   (:escape (leave-mode world))
+   (:q (leave-mode world))
+   (:left
+    (interact-with world :left)
+    (leave-mode world))
+   (:right
+    (interact-with world :right)
+    (leave-mode world))
+   (:up
+    (interact-with world :up)
+    (leave-mode world))
+   (:down
+    (interact-with world :down)
+    (leave-mode world))))
+
+(defmethod render ((mode interaction-mode) world)
+  (render-at-message-box 0 "INTERACTION")
+  (render-at-message-box 1 "Choose a direction"))
+
+(defclass lookup-mode ()
+  ((crosshair-pos :accessor crosshair-pos :initarg :crosshair-pos)
+   (crosshair-start-time
+    :accessor crosshair-start-time :initarg :crosshair-start-time
+    :documentation "Used for blinking the crosshair")))
 
 (defun move-crosshair (crosshair-pos direction)
   (let ((new-pos (vec3+ (v crosshair-pos)
@@ -276,13 +334,7 @@
     (for name = (r:if-let (named (c:component world entity 'named))
                   (name named)
                   (format nil "#~a" entity)))
-    (render-string #v(0 (+ i *viewport-height*)) (format nil "Looking at ~a" name))))
-
-(defclass lookup-mode ()
-  ((crosshair-pos :accessor crosshair-pos :initarg :crosshair-pos)
-   (crosshair-start-time
-    :accessor crosshair-start-time :initarg :crosshair-start-time
-    :documentation "Used for blinking the crosshair")))
+    (render-at-message-box i (format nil "Looking at ~a" name))))
 
 (defmethod handle-input ((mode lookup-mode) world key)
   (blt:key-case
@@ -316,8 +368,7 @@
   (iter (for msg in-sequence logs with-index i)
     (when (>= (1+ i) *message-height*)
       (return))
-    (blt:print 0 (+ *viewport-height* i)
-               (format nil "~d: ~a" i msg))))
+    (render-at-message-box i (format nil "~d: ~a" i msg))))
 
 (defun draw (world)
   (blt:clear)
