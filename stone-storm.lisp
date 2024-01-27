@@ -4,6 +4,7 @@
 
 (named-readtables:in-readtable r:rutils-readtable)
 
+(defparameter +target-fps+ 60)
 (defparameter *screen-width* 80)
 (defparameter *screen-height* 50)
 (defparameter *message-height* 10)
@@ -340,18 +341,22 @@
 (defun leave-mode (world)
   (pop (modes world)))
 
-(defun run ()
+(defun run (time)
   (when *running*
-    (draw *world*)
-    (when (blt:has-input-p)
-      (handle-input (first (modes *world*)) *world* (blt:read)))
-    (run)))
+    (let* ((new-time   (get-internal-real-time))
+           (elapsed-ms (/ (- new-time time) 100000000))
+           (to-sleep   (/ (- (/ 1000 +target-fps+) elapsed-ms) 1000)))
+      (sleep to-sleep)
+      (draw *world*)
+      (when (blt:has-input-p)
+        (handle-input (first (modes *world*)) *world* (blt:read)))
+      (run new-time))))
 
 (defun start ()
   (init-world)
   (setf *running* t)
   (blt:with-terminal
     (configure-window)
-    (run)))
+    (run (get-internal-real-time))))
 
 ;; (start)
