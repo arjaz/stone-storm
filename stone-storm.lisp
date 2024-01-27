@@ -31,6 +31,14 @@
 (defclass named (c:component) ((name :accessor name :initarg :name)))
 (defclass inventory (c:component) ((items :accessor items :initarg :items)))
 (defclass wall (c:component) () (:documentation "Used to render the walls nicely."))
+(defclass glasses (c:component) ())
+
+(defun place-monocle (world x y)
+  (c:add-components world (c:make-entity world)
+                    (make-instance 'glasses)
+                    (make-instance 'named :name "Monocle")
+                    (make-instance 'tile :tile #\o)
+                    (make-instance 'pos :v #v(x y 10))))
 
 (defun place-player (world x y)
   (c:add-components
@@ -40,7 +48,8 @@
    (make-instance 'collider)
    (make-instance 'pos :v #v(x y 99))
    (make-instance 'tile :tile #\@)
-   (make-instance 'health :health 3)))
+   (make-instance 'health :health 3)
+   (make-instance 'inventory :items nil)))
 
 (defun place-enemy (world x y tile &key (name nil))
   (let ((enemy (c:make-entity world)))
@@ -96,6 +105,7 @@
         ((#\#) (place-wall world x y))
         ((#\+) (place-closed-door world x y))
         ((#\@) (place-player world x y))
+        ((#\o) (place-monocle world x y))
         ((#\P) (place-enemy-pillar world x y))
         ((#\g) (place-enemy world x y #\g :name "Grave robber"))))))
 
@@ -263,8 +273,17 @@
    (lambda (e1 e2)
      (> (aref (v (first e1)) 2) (aref (v (first e2)) 2)))))
 
+
 (defmethod render ((mode main-game-mode) world)
   (iter
+    (with glasses-on =
+      (iter
+        (for p in (c:query world '(_ player inventory)))
+        (for inventory = (items (third p)))
+        (thereis
+         (iter
+           (for e in inventory)
+           (thereis (c:has-a 'glasses world e))))))
     (with sorted = (group-by
                     (c:query world '(_ pos tile))
                     :test #'equal-coordinates-p
@@ -272,8 +291,7 @@
                     :key (lambda (e) (vec3->vec2 (v (second e))))))
     (for entry in sorted)
     (for (entity pos tile) = (second entry))
-    ;; TODO: Control it if the player has glasses equipped
-    (if (c:has-a 'wall world entity)
+    (if (and glasses-on (c:has-a 'wall world entity))
         (render-wall world pos)
         (render-tile (v pos) (tile tile))))
   (when (equal mode (first (modes world)))
@@ -283,15 +301,19 @@
 
 (defun interact-with (world direction)
   (iter
-    (for (entity pos player) in (c:query world '(_ pos player)))
+    (for (player-entity pos player) in (c:query world '(_ pos player)))
     (with entities-with-positions = (c:query world '(_ pos)))
     (for target-position = (vec3+ (v pos) (direction->add-vec3 direction)))
-    (declare (ignorable entity player))
+    (declare (ignorable player))
     (when (in-world-map-p target-position)
       (r:when-let (targetted (entity-at target-position entities-with-positions))
         (cond
           ((c:has-a 'door world targetted)
-           (toggle-door world targetted)))))))
+           (toggle-door world targetted))
+          ((c:has-a 'glasses world targetted)
+           (r:when-let (inventory (c:component world player-entity 'inventory))
+             (push targetted (items inventory))
+             (c:remove-component world targetted 'pos))))))))
 
 (defmethod handle-input ((mode interaction-mode) world key)
   (blt:key-case
