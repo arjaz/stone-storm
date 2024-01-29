@@ -162,10 +162,13 @@
         (c:add-component world e new-pos))))
   (c:remove-entity world entity))
 
+(defun describe-entity (world entity)
+  (r:if-let (named (c:component world entity 'named))
+    (name named)
+    (format nil "#~a" entity)))
+
 (defun damage-health (world entity damage)
-  (let ((name (r:if-let (named (c:component world entity 'named))
-                (name named)
-                (format nil "#~a" entity))))
+  (let ((name (describe-entity world entity)))
     (decf (health (c:component world entity 'health)) damage)
     (push-log world (format nil "Dealt ~a damage to ~a" damage name))
     (when (>= 0 (health (c:component world entity 'health)))
@@ -183,8 +186,8 @@
 
 (defun move-player (world direction)
   (iter
-    (for (entity pos player) in (c:query world '(entity pos player)))
     (with colliders = (c:query world '(_ pos collider)))
+    (for (entity pos player) in (c:query world '(entity pos player)))
     (declare (ignorable entity player))
     (handle-move world colliders pos
                  (vec3+ (v pos) (direction->add-vec3 direction)))))
@@ -192,9 +195,9 @@
 (defgeneric render (mode world))
 (defgeneric handle-input (mode world key))
 
-(defun render-tile (position tile)
+(defun render-tile (position tile &key (color (blt:white)))
   (setf (blt:color)
-        (blt:white)
+        color
         (blt:cell-char (aref position 0) (aref position 1))
         tile))
 
@@ -275,7 +278,6 @@
    (lambda (e1 e2)
      (> (aref (v (first e1)) 2) (aref (v (first e2)) 2)))))
 
-
 (defmethod render ((mode main-game-mode) world)
   (iter
     (with glasses-on =
@@ -286,11 +288,12 @@
          (iter
            (for e in inventory)
            (thereis (c:has-a 'glasses world e))))))
-    (with sorted = (group-by
-                    (c:query world '(_ pos tile))
-                    :test #'equal-coordinates-p
-                    :value #'identity
-                    :key (lambda (e) (vec3->vec2 (v (second e))))))
+    (with sorted =
+      (group-by
+       (c:query world '(_ pos tile))
+       :test #'equal-coordinates-p
+       :value #'identity
+       :key (lambda (e) (vec3->vec2 (v (second e))))))
     (for entry in sorted)
     (for (entity pos tile) = (second entry))
     (if (and glasses-on (c:has-a 'wall world entity))
@@ -355,9 +358,7 @@
   (iter
     (for entity in-sequence (entities-at (v crosshair-pos) (c:query world '(_ pos)))
          with-index i)
-    (for name = (r:if-let (named (c:component world entity 'named))
-                  (name named)
-                  (format nil "#~a" entity)))
+    (for name = (describe-entity world entity))
     (render-at-message-box i (format nil "Looking at ~a" name))))
 
 (defmethod handle-input ((mode lookup-mode) world key)
@@ -435,3 +436,12 @@
     (run (get-internal-real-time))))
 
 ;; (start)
+
+;; (ql:quickload :sb-sprof)
+;; (sb-sprof:with-profiling (:report :flat
+;;                           :max-samples 1000)
+;;   (start))
+
+;; (sb-profile:profile c:query)
+;; (sb-profile:unprofile c:query)
+;; (sb-profile:report)
