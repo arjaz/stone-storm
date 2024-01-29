@@ -158,7 +158,7 @@
   (r:when-let (position (c:component world entity 'pos))
     (r:when-let (inventory (c:component world entity 'inventory))
       (iter (for e in (items inventory))
-        (for new-pos = (make-instance 'pos :v (copy-vec3 (v position))))
+        (for new-pos = (make-instance 'pos :v (copy-seq (v position))))
         (c:add-component world e new-pos))))
   (c:remove-entity world entity))
 
@@ -208,9 +208,10 @@
 
 (defun enter-lookup-mode (world)
   (let* ((player-pos (second (first (c:query world '(_ pos player)))))
-         (mode (make-instance 'lookup-mode
-                              :crosshair-pos (make-instance 'pos :v (copy-vec3 (v player-pos)))
-                              :crosshair-start-time (get-internal-real-time))))
+         (mode (make-instance
+                'lookup-mode
+                :crosshair-pos (make-instance 'pos :v (copy-seq (v player-pos)))
+                :crosshair-start-time (get-internal-real-time))))
     (enter-mode world mode)
     (describe-at-crosshair world (crosshair-pos mode))))
 
