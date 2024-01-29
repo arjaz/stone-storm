@@ -114,7 +114,8 @@
        (<= 0 (aref pos 1) (1- *viewport-height*))))
 
 (defun equal-coordinates-p (pos1 pos2)
-  (equalp (vec3->vec2 pos1) (vec3->vec2 pos2)))
+  (and (equal (aref pos1 0) (aref pos2 0))
+       (equal (aref pos1 1) (aref pos2 1))))
 
 (defun entity-at (pos query &key (get-position #'second))
   "Returns any entity at the given coordinates in the query."
