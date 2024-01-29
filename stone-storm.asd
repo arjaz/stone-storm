@@ -23,4 +23,4 @@
   :license "MIT public license"
   :serial t
   :components ((:file "chakra"))
-  :depends-on (#:iterate #:alexandria))
+  :depends-on (#:iterate #:rutils))

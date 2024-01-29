@@ -2,6 +2,8 @@
 
 (defpackage #:chakra
   (:use #:cl #:iter)
+  (:local-nicknames
+   (:r #:rutils))
   (:export
    #:world
    #:query
@@ -36,18 +38,8 @@
 (defclass resource () ()
   (:documentation "A base class for user-defined resources"))
 
-(defun query-positive-dependencies (query)
-  "Extract the dependencies of the QUERY which must be present."
-  (remove-if-not #'symbolp (rest query)))
-
-(defun query-negative-dependencies (query)
-  "Extract the dependencies of the QUERY which must not be present."
-  (mapcar #'second (remove-if #'symbolp (rest query))))
-
-(defun negative-dependencies-satisfied-p (world entity query)
-  "Check if the negative component dependencies of the QUERY which must not be present in the ENTITY
-are indeed not associated with that ENTITY in the given WORLD."
-  (iter (for component-type in (query-negative-dependencies query))
+(defun negatives-satisfied-p (world entity negatives)
+  (iter (for component-type in negatives)
     (when (has-a component-type world entity)
       (leave))
     (finally (return t))))
@@ -55,8 +47,8 @@ are indeed not associated with that ENTITY in the given WORLD."
 (defun positive-dependencies (world entity query)
   "Check if the positive component dependencies of the QUERY which must be present in the ENTITY
 are indeed associated with that ENTITY in the given WORLD."
-  (iter (for component-type in (query-positive-dependencies query))
-    (alexandria:if-let (component (component world entity component-type))
+  (iter (for component-type in (rest query))
+    (r:if-let (component (component world entity component-type))
       (collect component into collected-components)
       (leave))
     (finally (return (values collected-components t)))))
@@ -66,25 +58,20 @@ are indeed associated with that ENTITY in the given WORLD."
   "Check if the ENTITY is present in the WORLD."
   (not (zerop (aref (entity-ids world) entity))))
 
-(defun query (world query)
+;; TODO: I sort of expect it to be slow because of the lists
+(defun query (world query &key without)
   "Extract the list with the data of matching components based on the QUERY.
    The second value indicates whether the query was succesful.
-   You can also pass in (not component) to fetch only entities that don't have it.
+   You can also pass in a list of components as WITHOUT to fetch only entities that don't have it.
    E.g. a query '(_ position health) would return a list of matched entities:
    '((0 pos-0 health-0)
-     (1 pos-1 health-1))"
+     (1 pos-1 health-1) ...)"
   (iter (for entity from 0 below (length (entity-ids world)))
     (when (and (entity-defined-p world entity)
-               (negative-dependencies-satisfied-p world entity query))
-      (alexandria:when-let (components (positive-dependencies world entity query))
+               (if without (negatives-satisfied-p world entity without) t))
+      (r:when-let (components (positive-dependencies world entity query))
         (collect (append (list entity) components) into collected-components)))
     (finally (return (values collected-components t)))))
-
-(defun query-entity-components (world entity query)
-  "Extract the list with the data of matching components based on the QUERY.
-The second value indicates whether the query was successful."
-  (when (negative-dependencies-satisfied-p world entity (append (list 'ignore) query))
-    (positive-dependencies world entity (append (list 'ignore) query))))
 
 (defun make-entity (world)
   "Inserts a new empty entity into the WORLD and returns it."
