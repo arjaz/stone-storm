@@ -61,11 +61,10 @@ are indeed associated with that ENTITY in the given WORLD."
       (leave))
     (finally (return (values collected-components t)))))
 
+(declaim (inline entity-defined-p))
 (defun entity-defined-p (world entity)
   "Check if the ENTITY is present in the WORLD."
-  (handler-case
-      (not (zerop (aref (entity-ids world) entity)))
-    (sb-int:invalid-array-index-error () nil)))
+  (not (zerop (aref (entity-ids world) entity))))
 
 (defun query (world query)
   "Extract the list with the data of matching components based on the QUERY.
@@ -103,7 +102,7 @@ The second value indicates whether the query was successful."
 
 (defun remove-entity (world entity)
   "Removes the given ENTITY from the WORLD and clears out all associated components."
-  (when (zerop (aref (entity-ids world) entity))
+  (unless (entity-defined-p world entity)
     (warn "Entity ~a not found, nothing removed.~%" entity)
     (return-from remove-entity nil))
   (iter (for (component-type components) in-hashtable (entity-components world))
