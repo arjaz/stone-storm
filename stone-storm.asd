@@ -11,8 +11,10 @@
                #:iterate
                #:log4cl
                #:group-by
-               #:cl-blt)
+               #:cl-blt
+               #:named-readtables)
   :components ((:file "package")
+               (:file "reader")
                (:file "linalg")
                (:file "stone-storm")))
 

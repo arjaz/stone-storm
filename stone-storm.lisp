@@ -2,7 +2,7 @@
 
 (in-package #:stone-storm)
 
-(named-readtables:in-readtable r:rutils-readtable)
+(in-readtable stone-storm-readtable)
 
 (defparameter +target-fps+ 60)
 (defparameter *screen-width* 80)
@@ -38,7 +38,7 @@
                     (make-instance 'glasses)
                     (make-instance 'named :name "Monocle")
                     (make-instance 'tile :tile #\o)
-                    (make-instance 'pos :v #v(x y 10))))
+                    (make-instance 'pos :v #a(x y 10))))
 
 (defun place-player (world x y)
   (c:add-components
@@ -46,7 +46,7 @@
    (make-instance 'player)
    (make-instance 'named :name "Player")
    (make-instance 'collider)
-   (make-instance 'pos :v #v(x y 99))
+   (make-instance 'pos :v #a(x y 99))
    (make-instance 'tile :tile #\@)
    (make-instance 'health :health 3)
    (make-instance 'inventory :items nil)))
@@ -56,7 +56,7 @@
     (c:add-components
      world enemy
      (make-instance 'collider)
-     (make-instance 'pos :v #v(x y 50))
+     (make-instance 'pos :v #a(x y 50))
      (make-instance 'tile :tile tile)
      (make-instance 'health :health 3))
     (when name
@@ -82,7 +82,7 @@
    (make-instance 'collider)
    (make-instance 'wall)
    (make-instance 'tile :tile #\#)
-   (make-instance 'pos :v #v(x y 1))))
+   (make-instance 'pos :v #a(x y 1))))
 
 (defun place-closed-door (world x y)
   (c:add-components
@@ -91,7 +91,7 @@
    (make-instance 'collider)
    (make-instance 'door)
    (make-instance 'tile :tile #\+)
-   (make-instance 'pos :v #v(x y 1))))
+   (make-instance 'pos :v #a(x y 1))))
 
 (defun load-level (world filename)
   (iter
@@ -130,10 +130,10 @@
 
 (defun direction->add-vec3 (direction)
   (ecase direction
-    ((:up) #v(0 -1 0))
-    ((:down) #v(0 1 0))
-    ((:left) #v(-1 0 0))
-    ((:right) #v(1 0 0))))
+    ((:up) #(0 -1 0))
+    ((:down) #(0 1 0))
+    ((:left) #(-1 0 0))
+    ((:right) #(1 0 0))))
 
 (defun open-door (world door)
   (c:remove-component world door 'collider)
@@ -201,7 +201,7 @@
   (blt:print (aref position 0) (aref position 1) string))
 
 (defun render-at-message-box (line string)
-  (render-string #v(0 (+ line *viewport-height*)) string))
+  (render-string #a(0 (+ line *viewport-height*)) string))
 
 (defclass main-game-mode () ())
 
