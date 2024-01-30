@@ -47,7 +47,7 @@
 (defun positive-dependencies (world entity query)
   "Check if the positive component dependencies of the QUERY which must be present in the ENTITY
 are indeed associated with that ENTITY in the given WORLD."
-  (iter (for component-type in (rest query))
+  (iter (for component-type in query)
     (r:if-let (component (component world entity component-type))
       (collect component into collected-components)
       (leave))
@@ -63,7 +63,7 @@ are indeed associated with that ENTITY in the given WORLD."
   "Extract the list with the data of matching components based on the QUERY.
    The second value indicates whether the query was succesful.
    You can also pass in a list of components as WITHOUT to fetch only entities that don't have it.
-   E.g. a query '(_ position health) would return a list of matched entities:
+   E.g. a query '(position health) would return a list of matched entities:
    '((0 pos-0 health-0)
      (1 pos-1 health-1) ...)"
   (iter (for entity from 0 below (length (entity-ids world)))

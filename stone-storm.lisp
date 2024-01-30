@@ -34,11 +34,12 @@
 (defclass glasses (c:component) ())
 
 (defun place-monocle (world x y)
-  (c:add-components world (c:make-entity world)
-                    (make-instance 'glasses)
-                    (make-instance 'named :name "Monocle")
-                    (make-instance 'tile :tile #\o)
-                    (make-instance 'pos :v #a(x y 10))))
+  (c:add-components
+   world (c:make-entity world)
+   (make-instance 'glasses)
+   (make-instance 'named :name "Monocle")
+   (make-instance 'tile :tile #\o)
+   (make-instance 'pos :v #a(x y 10))))
 
 (defun place-player (world x y)
   (c:add-components
@@ -186,8 +187,8 @@
 
 (defun move-player (world direction)
   (iter
-    (with colliders = (c:query world '(_ pos collider)))
-    (for (entity pos player) in (c:query world '(entity pos player)))
+    (with colliders = (c:query world '(pos collider)))
+    (for (entity pos player) in (c:query world '(pos player)))
     (declare (ignorable entity player))
     (handle-move world colliders pos
                  (vec3+ (v pos) (direction->add-vec3 direction)))))
@@ -210,7 +211,7 @@
 (defclass main-game-mode () ())
 
 (defun enter-lookup-mode (world)
-  (let* ((player-pos (second (first (c:query world '(_ pos player)))))
+  (let* ((player-pos (second (first (c:query world '(pos player)))))
          (mode (make-instance
                 'lookup-mode
                 :crosshair-pos (make-instance 'pos :v (copy-seq (v player-pos)))
@@ -236,7 +237,7 @@
    (:down (move-player world :down))))
 
 (defun wall-bitmap (world position)
-  (let ((walls (c:query world '(_ pos wall)))
+  (let ((walls (c:query world '(pos wall)))
         (v-pos (v position))
         (bitmap 0))
     (when (entity-at (vec3+ v-pos #(0 -1 0)) walls)
@@ -282,15 +283,14 @@
   (iter
     (with glasses-on =
       (iter
-        (for p in (c:query world '(_ player inventory)))
+        (for p in (c:query world '(player inventory)))
         (for inventory = (items (third p)))
         (thereis
-         (iter
-           (for e in inventory)
+         (iter (for e in inventory)
            (thereis (c:has-a 'glasses world e))))))
     (with sorted =
       (group-by
-       (c:query world '(_ pos tile))
+       (c:query world '(pos tile))
        :test #'equal-coordinates-p
        :value #'identity
        :key (lambda (e) (vec3->vec2 (v (second e))))))
@@ -306,8 +306,8 @@
 
 (defun interact-with (world direction)
   (iter
-    (for (player-entity pos player) in (c:query world '(_ pos player)))
-    (with entities-with-positions = (c:query world '(_ pos)))
+    (for (player-entity pos player) in (c:query world '(pos player)))
+    (with entities-with-positions = (c:query world '(pos)))
     (for target-position = (vec3+ (v pos) (direction->add-vec3 direction)))
     (declare (ignorable player))
     (when (in-world-map-p target-position)
@@ -354,9 +354,9 @@
     (when (in-world-map-p new-pos)
       (setf (v crosshair-pos) new-pos))))
 
-(defun describe-at-crosshair (world crosshair-pos)
+(defun describe-at (world pos)
   (iter
-    (for entity in-sequence (entities-at (v crosshair-pos) (c:query world '(_ pos)))
+    (for entity in-sequence (entities-at (v pos) (c:query world '(pos)))
          with-index i)
     (for name = (describe-entity world entity))
     (render-at-message-box i (format nil "Looking at ~a" name))))
@@ -387,12 +387,11 @@
         (current-time (get-internal-real-time)))
     (when (evenp (floor (- current-time mode-start-time) half-a-second))
       (render-tile (v crosshair) #\·)))
-  (describe-at-crosshair world (crosshair-pos mode)))
+  (describe-at world (crosshair-pos mode)))
 
 (defun render-logs (logs)
   (iter (for msg in-sequence logs with-index i)
-    (when (>= (1+ i) *message-height*)
-      (return))
+    (when (>= (1+ i) *message-height*) (return))
     (render-at-message-box i (format nil "~d: ~a" i msg))))
 
 (defun draw (world)
