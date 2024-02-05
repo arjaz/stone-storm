@@ -217,7 +217,7 @@
                 :crosshair-pos (make-instance 'pos :v (copy-seq (v player-pos)))
                 :crosshair-start-time (get-internal-real-time))))
     (enter-mode world mode)
-    (describe-at-crosshair world (crosshair-pos mode))))
+    (describe-at world (crosshair-pos mode))))
 
 (defun enter-interaction-mode (world)
   (enter-mode world (make-instance 'interaction-mode)))
@@ -271,13 +271,6 @@
 
 (defun render-wall (world position)
   (render-tile (v position) (wall-bitmap->tile (wall-bitmap world position))))
-
-(defun sorted-by-z (query)
-  "Each position is a vec3, we reverse sort by z"
-  (r:safe-sort
-   query
-   (lambda (e1 e2)
-     (> (aref (v (first e1)) 2) (aref (v (first e2)) 2)))))
 
 (defmethod render ((mode main-game-mode) world)
   (iter
