@@ -207,8 +207,14 @@
 (defun render-string (position string)
   (blt:print (aref position 0) (aref position 1) string))
 
+(defun render-message-box ()
+  (blt:draw-box 0 *viewport-height* *viewport-width* *message-height*))
+
+(defun render-at-message-box-head (string)
+  (render-string #a(1 (+ *viewport-height*)) string))
+
 (defun render-at-message-box (line string)
-  (render-string #a(0 (+ line *viewport-height*)) string))
+  (render-string #a(1 (+ 1 line *viewport-height*)) string))
 
 (defclass main-game-mode () ())
 
@@ -295,6 +301,8 @@
         (render-wall world pos)
         (render-tile (v pos) (tile tile))))
   (when (equal mode (first (modes world)))
+    (render-message-box)
+    (render-at-message-box-head "LOGS")
     (render-logs (logs world))))
 
 (defclass interaction-mode () ())
@@ -334,8 +342,9 @@
     (leave-mode world))))
 
 (defmethod render ((mode interaction-mode) world)
-  (render-at-message-box 0 "INTERACTION")
-  (render-at-message-box 1 "Choose a direction"))
+  (render-message-box)
+  (render-at-message-box-head "INTERACTION")
+  (render-at-message-box 0 "Choose a direction"))
 
 (defclass lookup-mode ()
   ((crosshair-pos :accessor crosshair-pos :initarg :crosshair-pos)
@@ -382,12 +391,14 @@
         (current-time (get-internal-real-time)))
     (when (evenp (floor (- current-time mode-start-time) half-a-second))
       (render-tile (v crosshair) #\·)))
+  (render-message-box)
+  (render-at-message-box-head "LOOK UP")
   (describe-at world (crosshair-pos mode)))
 
 (defun render-logs (logs)
   (iter (for msg in-sequence logs with-index i)
     (when (>= (1+ i) *message-height*) (return))
-    (render-at-message-box i (format nil "~d: ~a" i msg))))
+    (render-at-message-box i msg)))
 
 (defun draw (world)
   (blt:clear)
