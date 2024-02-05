@@ -107,18 +107,14 @@ are indeed associated with that ENTITY in the given WORLD."
 
 (defun add-component (world entity component)
   "Adds a COMPONENT to the ENTITY in the WORLD."
-  ;; Adding a component means the following:
-  ;; Initializing the component-type if it's not there
-  ;; Extending the component array if it's too small
-  ;; Setting the component at entity index
-  (let* ((components (or (gethash (type-of component) (entity-components world))
-                         (setf (gethash (type-of component) (entity-components world))
-                               (make-array (max entity 255)
-                                           :fill-pointer 0
-                                           :adjustable t
-                                           :initial-element nil))))
-         (last-index (1- (array-total-size components))))
-    (when (> entity last-index)
+  (let ((components
+          (r:getsethash
+           (type-of component) (entity-components world)
+           (make-array (max entity 255)
+                       :fill-pointer 0
+                       :adjustable t
+                       :initial-element nil))))
+    (when (> entity (1- (array-total-size components)))
       (adjust-array components (floor (* entity 1.5))))
     (setf (aref components entity) component)))
 
