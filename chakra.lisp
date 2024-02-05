@@ -33,11 +33,6 @@
     :documentation "An array of all entity ids."))
   (:documentation "Handles the entities and their components."))
 
-(defclass component () ()
-  (:documentation "A base class for user-defined components"))
-(defclass resource () ()
-  (:documentation "A base class for user-defined resources"))
-
 (defun negatives-satisfied-p (world entity negatives)
   (iter (for component-type in negatives)
     (when (has-a component-type world entity)
