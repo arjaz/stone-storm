@@ -397,7 +397,7 @@
 
 (defun render-logs (logs)
   (iter (for msg in-sequence logs with-index i)
-    (when (>= (1+ i) *message-height*) (return))
+    (when (>= (+ i 2) *message-height*) (return))
     (render-at-message-box i msg)))
 
 (defun draw (world)
