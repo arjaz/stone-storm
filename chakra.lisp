@@ -42,30 +42,31 @@
 (defun positive-dependencies (world entity query)
   "Check if the positive component dependencies of the QUERY which must be present in the ENTITY
 are indeed associated with that ENTITY in the given WORLD."
-  (iter (for component-type in query)
+  (iter
+    (with collected-components = ())
+    (for component-type in query)
     (r:if-let (component (component world entity component-type))
-      (collect component into collected-components)
+      (push component collected-components)
       (leave))
-    (finally (return (values collected-components t)))))
+    (finally (return (values (nreverse (cons entity collected-components)) t)))))
 
 (declaim (inline entity-defined-p))
 (defun entity-defined-p (world entity)
   "Check if the ENTITY is present in the WORLD."
   (not (zerop (aref (entity-ids world) entity))))
 
-;; TODO: I sort of expect it to be slow because of the lists
 (defun query (world query &key without)
   "Extract the list with the data of matching components based on the QUERY.
    The second value indicates whether the query was succesful.
    You can also pass in a list of components as WITHOUT to fetch only entities that don't have it.
    E.g. a query '(position health) would return a list of matched entities:
-   '((0 pos-0 health-0)
-     (1 pos-1 health-1) ...)"
+   '((pos-0 health-0 0)
+     (pos-1 health-1 1) ...)"
   (iter (for entity from 0 below (length (entity-ids world)))
     (when (and (entity-defined-p world entity)
                (if without (negatives-satisfied-p world entity without) t))
       (r:when-let (components (positive-dependencies world entity query))
-        (collect (append (list entity) components) into collected-components)))
+        (collect components into collected-components)))
     (finally (return (values collected-components t)))))
 
 (defun make-entity (world)
@@ -79,7 +80,7 @@ are indeed associated with that ENTITY in the given WORLD."
         (leave entity))
       ;; if no empty slots found - extend the entities array
       (finally
-       (vector-push-extend 1 ids entity)
+       (vector-push-extend 1 ids)
        (return entity)))))
 
 (defun remove-entity (world entity)

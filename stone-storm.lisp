@@ -120,17 +120,17 @@
   (and (equal (aref pos1 0) (aref pos2 0))
        (equal (aref pos1 1) (aref pos2 1))))
 
-(defun entity-at (pos query &key (get-position #'second))
+(defun entity-at (pos query &key (get-position #'first))
   "Returns any entity at the given coordinates in the query."
   (iter (for entity in query)
     (for entity-pos = (v (funcall get-position entity)))
-    (finding (first entity) such-that (equal-coordinates-p pos entity-pos))))
+    (finding (r:last1 entity) such-that (equal-coordinates-p pos entity-pos))))
 
-(defun entities-at (pos query &key (get-position #'second))
+(defun entities-at (pos query &key (get-position #'first))
   "Returns all entities at the given coordinates in the query."
   (iter (for entity in query)
     (when (equal-coordinates-p pos (v (funcall get-position entity)))
-      (collect (first entity)))))
+      (collect (r:last1 entity)))))
 
 (defun direction->add-vec3 (direction)
   (ecase direction
@@ -190,7 +190,7 @@
 (defun move-player (world direction)
   (iter
     (with colliders = (c:query world '(pos collider)))
-    (for (entity pos player) in (c:query world '(pos player)))
+    (for (pos player entity) in (c:query world '(pos player)))
     (declare (ignorable entity player))
     (handle-move world colliders pos
                  (vec3+ (v pos) (direction->add-vec3 direction)))))
@@ -219,7 +219,7 @@
 (defclass main-game-mode () ())
 
 (defun enter-lookup-mode (world)
-  (let* ((player-pos (second (first (c:query world '(pos player)))))
+  (let* ((player-pos (first (first (c:query world '(pos player)))))
          (mode (make-instance
                 'lookup-mode
                 :crosshair-pos (make-instance 'pos :v (copy-seq (v player-pos)))
@@ -285,7 +285,7 @@
     (with glasses-on =
       (iter
         (for p in (c:query world '(player inventory)))
-        (for inventory = (items (third p)))
+        (for inventory = (items (second p)))
         (thereis
          (iter (for e in inventory)
            (thereis (c:has-a 'glasses world e))))))
@@ -294,9 +294,9 @@
        (c:query world '(pos tile))
        :test #'equal-coordinates-p
        :value #'identity
-       :key (lambda (e) (vec3->vec2 (v (second e))))))
+       :key (lambda (e) (vec3->vec2 (v (first e))))))
     (for entry in sorted)
-    (for (entity pos tile) = (second entry))
+    (for (pos tile entity) = (second entry))
     (if (and glasses-on (c:has-a 'wall world entity))
         (render-wall world pos)
         (render-tile (v pos) (tile tile))))
@@ -309,7 +309,7 @@
 
 (defun interact-with (world direction)
   (iter
-    (for (player-entity pos player) in (c:query world '(pos player)))
+    (for (pos player player-entity) in (c:query world '(pos player)))
     (with entities-with-positions = (c:query world '(pos)))
     (for target-position = (vec3+ (v pos) (direction->add-vec3 direction)))
     (declare (ignorable player))
