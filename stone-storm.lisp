@@ -400,10 +400,12 @@
     (when (>= (+ i 2) *message-height*) (return))
     (render-at-message-box i msg)))
 
-(defun draw (world)
+(defun draw (world fps)
   (blt:clear)
   (iter (for mode in (reverse (modes world)))
     (render mode world))
+  (when *debug*
+    (render-at-message-box (- *message-height* 2) (format nil "FPS: ~a" fps)))
   (blt:refresh))
 
 (defun configure-window ()
@@ -425,10 +427,12 @@
 (defun run (time)
   (when *running*
     (let* ((new-time   (get-internal-real-time))
-           (elapsed-ms (/ (- new-time time) 100000000))
+           (elapsed-ms (/ (- new-time time) 1000000000))
+           (elapsed-s  (/ (- new-time time) 1000000))
+           (fps        (if (= 0 elapsed-s) 0 (floor (/ 1 elapsed-s))))
            (to-sleep   (/ (- (/ 1000 +target-fps+) elapsed-ms) 1000)))
       (sleep to-sleep)
-      (draw *world*)
+      (draw *world* fps)
       (when (blt:has-input-p)
         (handle-input (first (modes *world*)) *world* (blt:read)))
       (run new-time))))
