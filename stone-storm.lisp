@@ -97,20 +97,25 @@
    (make-instance 'pos :v #a(x y 1))))
 
 (defun load-level (world filename)
-  (iter
-    (for line in-sequence (r:split #\newline (r:read-file filename)) with-index y)
-    (when (> y *viewport-height*)
-      (error "Level [~a] is bigger than allowed, expected max ~a rows, found at least ~a" filename *viewport-height* y))
-    (iter (for char in-string line with-index x)
-      (when (> x *viewport-width*)
-        (error "Level [~a] is bigger than allowed, expected max ~a colums, found at least ~a" filename *viewport-width* x))
-      (case char
-        ((#\#) (place-wall world x y))
-        ((#\+) (place-closed-door world x y))
-        ((#\@) (place-player world x y))
-        ((#\o) (place-monocle world x y))
-        ((#\P) (place-enemy-pillar world x y))
-        ((#\g) (place-enemy world x y #\g :name "Grave robber"))))))
+  (with-open-file (stream filename :direction :input)
+    (iter
+      (for line = (read-line stream nil))
+      (for y from 0)
+      (while line)
+      (when (> y *viewport-height*)
+        (error "Level [~a] is bigger than allowed, expected max ~a rows, found at least ~a"
+               filename *viewport-height* y))
+      (iter (for char in-string line with-index x)
+        (when (> x *viewport-width*)
+          (error "Level [~a] is bigger than allowed, expected max ~a colums, found at least ~a"
+                 filename *viewport-width* x))
+        (case char
+          ((#\#) (place-wall world x y))
+          ((#\+) (place-closed-door world x y))
+          ((#\@) (place-player world x y))
+          ((#\o) (place-monocle world x y))
+          ((#\P) (place-enemy-pillar world x y))
+          ((#\g) (place-enemy world x y #\g :name "Grave robber")))))))
 
 (defun in-world-map-p (pos)
   (and (<= 0 (aref pos 0) (1- *viewport-width*))
