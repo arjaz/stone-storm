@@ -42,7 +42,7 @@
    (make-instance 'glasses)
    (make-instance 'named :name "Monocle")
    (make-instance 'tile :tile #\o)
-   (make-instance 'pos :v #a(x y 10))))
+   (make-instance 'pos :v #i(x y 10))))
 
 (defun place-player (world x y)
   (c:add-components
@@ -50,7 +50,7 @@
    (make-instance 'player)
    (make-instance 'named :name "Player")
    (make-instance 'collider)
-   (make-instance 'pos :v #a(x y 99))
+   (make-instance 'pos :v #i(x y 99))
    (make-instance 'tile :tile #\@)
    (make-instance 'health :health 3)))
 
@@ -60,14 +60,14 @@
    (make-instance 'grants-inventory)
    (make-instance 'named :name "Backpack")
    (make-instance 'tile :tile #\b)
-   (make-instance 'pos :v #a(x y 11))))
+   (make-instance 'pos :v #i(x y 11))))
 
 (defun place-enemy (world x y tile &key (name nil))
   (let ((enemy (c:make-entity world)))
     (c:add-components
      world enemy
      (make-instance 'collider)
-     (make-instance 'pos :v #a(x y 50))
+     (make-instance 'pos :v #i(x y 50))
      (make-instance 'tile :tile tile)
      (make-instance 'health :health 4))
     (when name
@@ -93,7 +93,7 @@
    (make-instance 'collider)
    (make-instance 'wall)
    (make-instance 'tile :tile #\#)
-   (make-instance 'pos :v #a(x y 1))))
+   (make-instance 'pos :v #i(x y 1))))
 
 (defun place-closed-door (world x y)
   (c:add-components
@@ -102,7 +102,7 @@
    (make-instance 'collider)
    (make-instance 'door)
    (make-instance 'tile :tile #\+)
-   (make-instance 'pos :v #a(x y 1))))
+   (make-instance 'pos :v #i(x y 1))))
 
 (defun load-level (world filename)
   (with-open-file (stream filename :direction :input)
@@ -131,6 +131,8 @@
        (<= 0 (aref pos 1) (1- *viewport-height*))))
 
 (defun equal-coordinates-p (pos1 pos2)
+  (declare (optimize (speed 3))
+           (type (simple-array fixnum) pos1 pos2))
   (and (= (aref pos1 0) (aref pos2 0))
        (= (aref pos1 1) (aref pos2 1))))
 
@@ -146,12 +148,12 @@
     (when (equal-coordinates-p pos (v (funcall get-position entity)))
       (collect (r:last1 entity)))))
 
-(defun direction->add-vec3 (direction)
+(defun direction->add-ivec3 (direction)
   (ecase direction
-    ((:up) #(0 -1 0))
-    ((:down) #(0 1 0))
-    ((:left) #(-1 0 0))
-    ((:right) #(1 0 0))))
+    ((:up)    #i(0 -1 0))
+    ((:down)  #i(0 1 0))
+    ((:left)  #i(-1 0 0))
+    ((:right) #i(1 0 0))))
 
 (defun open-door (world door)
   (c:remove-component world door 'collider)
@@ -207,7 +209,7 @@
     (for (pos player entity) in (c:query world '(pos player)))
     (declare (ignorable entity player))
     (handle-move world colliders pos
-                 (vec3+ (v pos) (direction->add-vec3 direction)))))
+                 (ivec3+ (v pos) (direction->add-ivec3 direction)))))
 
 (defgeneric render (mode world))
 (defgeneric handle-input (mode world key))
@@ -225,10 +227,10 @@
   (blt:draw-box 0 *viewport-height* *viewport-width* *message-height*))
 
 (defun render-at-message-box-head (string)
-  (render-string #a(1 (+ *viewport-height*)) string))
+  (render-string #i(1 (+ *viewport-height*)) string))
 
 (defun render-at-message-box (line string)
-  (render-string #a(1 (+ 1 line *viewport-height*)) string))
+  (render-string #i(1 (+ 1 line *viewport-height*)) string))
 
 (defclass main-game-mode () ())
 
@@ -271,13 +273,13 @@
   (let ((walls (c:query world '(pos wall)))
         (v-pos (v position))
         (bitmap 0))
-    (when (entity-at (vec3+ v-pos #(0 -1 0)) walls)
+    (when (entity-at (ivec3+ v-pos #i(0 -1 0)) walls)
       (incf bitmap #b0001))
-    (when (entity-at (vec3+ v-pos #(0 1 0)) walls)
+    (when (entity-at (ivec3+ v-pos #i(0 1 0)) walls)
       (incf bitmap #b0010))
-    (when (entity-at (vec3+ v-pos #(-1 0 0)) walls)
+    (when (entity-at (ivec3+ v-pos #i(-1 0 0)) walls)
       (incf bitmap #b0100))
-    (when (entity-at (vec3+ v-pos #(1 0 0)) walls)
+    (when (entity-at (ivec3+ v-pos #i(1 0 0)) walls)
       (incf bitmap #b1000))
     bitmap))
 
@@ -317,7 +319,7 @@
        (c:query world '(pos tile))
        :test #'equal-coordinates-p
        :value #'identity
-       :key (lambda (e) (vec3->vec2 (v (first e))))))
+       :key (lambda (e) (ivec3->ivec2 (v (first e))))))
     (for entry in sorted)
     (for (pos tile entity) = (second entry))
     (if (and glasses-on (c:has-a 'wall world entity))
@@ -351,7 +353,7 @@
     (with entities-with-positions = (c:query world '(pos)))
     (for (pos player player-entity) in (c:query world '(pos player)))
     (declare (ignorable player))
-    (for target-position = (vec3+ (v pos) (direction->add-vec3 direction)))
+    (for target-position = (ivec3+ (v pos) (direction->add-ivec3 direction)))
     (when (in-world-map-p target-position)
       (r:if-let (targetted (entity-at target-position entities-with-positions))
         (cond
@@ -411,8 +413,8 @@
     :documentation "Used for blinking the crosshair")))
 
 (defun move-crosshair (crosshair-pos direction)
-  (let ((new-pos (vec3+ (v crosshair-pos)
-                        (direction->add-vec3 direction))))
+  (let ((new-pos (ivec3+ (v crosshair-pos)
+                        (direction->add-ivec3 direction))))
     (when (in-world-map-p new-pos)
       (setf (v crosshair-pos) new-pos))))
 
