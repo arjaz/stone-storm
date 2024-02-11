@@ -19,8 +19,8 @@
   ((modes :accessor modes :initarg :modes :initform nil)
    (logs :accessor logs :initarg :logs :initform nil)))
 
-(defun push-log (world msg)
-  (push msg (logs world)))
+(defun push-log (world msg &rest format-arguments)
+  (push (apply #'format nil msg format-arguments) (logs world)))
 
 (defclass pos () ((v :accessor v :initarg :v)))
 (defclass tile () ((tile :accessor tile :initarg :tile)))
@@ -29,6 +29,7 @@
 (defclass door () ())
 (defclass health () ((health :accessor health :initarg :health)))
 (defclass named () ((name :accessor name :initarg :name)))
+(defclass grants-inventory () ())
 (defclass inventory () ((items :accessor items :initarg :items)))
 (defclass wall () () (:documentation "Used to render the walls nicely."))
 (defclass glasses () ())
@@ -51,8 +52,15 @@
    (make-instance 'collider)
    (make-instance 'pos :v #a(x y 99))
    (make-instance 'tile :tile #\@)
-   (make-instance 'health :health 3)
-   (make-instance 'inventory :items nil)))
+   (make-instance 'health :health 3)))
+
+(defun place-backpack (world x y)
+  (c:add-components
+   world (c:make-entity world)
+   (make-instance 'grants-inventory)
+   (make-instance 'named :name "Backpack")
+   (make-instance 'tile :tile #\b)
+   (make-instance 'pos :v #a(x y 11))))
 
 (defun place-enemy (world x y tile &key (name nil))
   (let ((enemy (c:make-entity world)))
@@ -61,7 +69,7 @@
      (make-instance 'collider)
      (make-instance 'pos :v #a(x y 50))
      (make-instance 'tile :tile tile)
-     (make-instance 'health :health 3))
+     (make-instance 'health :health 4))
     (when name
       (c:add-component world enemy (make-instance 'named :name name)))
     enemy))
@@ -113,6 +121,7 @@
           ((#\#) (place-wall world x y))
           ((#\+) (place-closed-door world x y))
           ((#\@) (place-player world x y))
+          ((#\b) (place-backpack world x y))
           ((#\o) (place-monocle world x y))
           ((#\P) (place-enemy-pillar world x y))
           ((#\g) (place-enemy world x y #\g :name "Grave robber")))))))
@@ -162,7 +171,7 @@
     (close-door world door)))
 
 (defun kill-entity (world entity name)
-  (push-log world (format nil "~a died" name))
+  (push-log world "~a died" name)
   (r:when-let (position (c:component world entity 'pos))
     (r:when-let (inventory (c:component world entity 'inventory))
       (iter (for e in (items inventory))
@@ -178,7 +187,7 @@
 (defun damage-health (world entity damage)
   (let ((name (describe-entity world entity)))
     (decf (health (c:component world entity 'health)) damage)
-    (push-log world (format nil "Dealt ~a damage to ~a" damage name))
+    (push-log world "Dealt ~a damage to ~a" damage name)
     (when (>= 0 (health (c:component world entity 'health)))
       (kill-entity world entity name))))
 
@@ -224,7 +233,7 @@
 (defclass main-game-mode () ())
 
 (defun enter-lookup-mode (world)
-  (let* ((player-pos (first (first (c:query world '(pos player)))))
+  (let* ((player-pos (caar (c:query world '(pos player))))
          (mode (make-instance
                 'lookup-mode
                 :crosshair-pos (make-instance 'pos :v (copy-seq (v player-pos)))
@@ -235,6 +244,14 @@
 (defun enter-interaction-mode (world)
   (enter-mode world (make-instance 'interaction-mode)))
 
+(defun enter-inventory-listing-mode (world)
+  (let ((player (cadar (c:query world '(player)))))
+    (r:if-let (i (c:component world player 'inventory))
+      (enter-mode world (make-instance 'listing-mode
+                                       :items (items i)
+                                       :info "INVENTORY"))
+      (push-log world "You have no inventory"))))
+
 (defmethod handle-input ((mode main-game-mode) world key)
   (blt:key-case
    key
@@ -243,6 +260,7 @@
    (:close (setf *running* nil))
    (:r (init-world))
    (:l (enter-lookup-mode world))
+   (:i (enter-inventory-listing-mode world))
    (:space (enter-interaction-mode world))
    (:left (move-player world :left))
    (:right (move-player world :right))
@@ -312,21 +330,39 @@
 
 (defclass interaction-mode () ())
 
+(defun try-add-to-inventory (world entity added)
+  (r:if-let (inventory (c:component world entity 'inventory))
+    (progn
+      (push added (items inventory))
+      (c:remove-component world added 'pos))
+    (push-log world
+              "~a has no inventory to store ~a"
+              (describe-entity world entity)
+              (describe-entity world added))))
+
+(defun equip-backpack (world entity backpack)
+  ;; I guess I also need to do something when the backpack is already equipped
+  ;; Maybe drop the old one?
+  (c:add-component world entity (make-instance 'inventory :items nil))
+  (try-add-to-inventory world entity backpack))
+
 (defun interact-with (world direction)
   (iter
-    (for (pos player player-entity) in (c:query world '(pos player)))
     (with entities-with-positions = (c:query world '(pos)))
-    (for target-position = (vec3+ (v pos) (direction->add-vec3 direction)))
+    (for (pos player player-entity) in (c:query world '(pos player)))
     (declare (ignorable player))
+    (for target-position = (vec3+ (v pos) (direction->add-vec3 direction)))
     (when (in-world-map-p target-position)
-      (r:when-let (targetted (entity-at target-position entities-with-positions))
+      (r:if-let (targetted (entity-at target-position entities-with-positions))
         (cond
           ((c:has-a 'door world targetted)
            (toggle-door world targetted))
+          ((c:has-a 'grants-inventory world targetted)
+           (equip-backpack world player-entity targetted))
           ((c:has-a 'glasses world targetted)
-           (r:when-let (inventory (c:component world player-entity 'inventory))
-             (push targetted (items inventory))
-             (c:remove-component world targetted 'pos))))))))
+           (try-add-to-inventory world player-entity targetted))
+          (t (push-log world "You can't do anything with ~a" (describe-entity world targetted))))
+        (push-log world "There is nothing there")))))
 
 (defmethod handle-input ((mode interaction-mode) world key)
   (blt:key-case
@@ -350,6 +386,23 @@
   (render-message-box)
   (render-at-message-box-head "INTERACTION")
   (render-at-message-box 0 "Choose a direction"))
+
+(defclass listing-mode ()
+  ((info :accessor listing-info :initarg :info)
+   (items :accessor listing-items :initarg :items)))
+
+(defmethod handle-input ((mode listing-mode) world key)
+  (blt:key-case
+   key
+   (:q (leave-mode world))
+   (:escape (leave-mode world))))
+
+(defmethod render ((mode listing-mode) world)
+  (render-message-box)
+  (render-at-message-box-head (listing-info mode))
+  (iter (for item in-sequence (listing-items mode) with-index i)
+    (when (>= (+ i 2) *message-height*) (return))
+    (render-at-message-box i (describe-entity world item))))
 
 (defclass lookup-mode ()
   ((crosshair-pos :accessor crosshair-pos :initarg :crosshair-pos)
@@ -397,7 +450,7 @@
     (when (evenp (floor (- current-time mode-start-time) half-a-second))
       (render-tile (v crosshair) #\·)))
   (render-message-box)
-  (render-at-message-box-head "LOOK UP")
+  (render-at-message-box-head "LOOKUP")
   (describe-at world (crosshair-pos mode)))
 
 (defun render-logs (logs)
